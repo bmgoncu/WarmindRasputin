@@ -17,8 +17,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { extname, join, normalize, resolve } from "node:path";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, extname, join, normalize, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 
@@ -26,9 +26,45 @@ import { synthesize } from "./voice/synth.js";
 import { extractTimeline, toWire } from "./audio/timeline.js";
 import { getChain } from "./voice/chains.js";
 import { translate } from "./voice/translate.js";
-import { DAEMON_PORT, isClientMsg, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
+import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
+const CONFIG_PATH = resolve("cache", "config.json");
+
+/**
+ * Live settings, owned by the daemon.
+ *
+ * The daemon holds them rather than either window because the preferences window and the overlay
+ * are separate webviews with no shared memory, and because settings must survive a reload of
+ * either. Defaults match the values tuned by ear in M2.
+ */
+let config: OrbConfig = {
+    idleFloor: 0.22,
+    shakeScale: 1,
+    outerRadius: 1.78,
+    joltCount: 5,
+    arcCount: 3,
+    opaqueBackground: false,
+    subtitles: true,
+    chain: "measured",
+};
+
+async function loadConfig(): Promise<void> {
+    try {
+        config = { ...config, ...(JSON.parse(await readFile(CONFIG_PATH, "utf8")) as OrbConfig) };
+    } catch {
+        // No saved config yet, or it is unreadable — defaults stand.
+    }
+}
+
+async function saveConfig(): Promise<void> {
+    try {
+        await mkdir(dirname(CONFIG_PATH), { recursive: true });
+        await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
+    } catch (err) {
+        console.warn("could not persist config:", String(err));
+    }
+}
 const CACHE_DIR = resolve("cache");
 // vite.config.ts builds to lib/web, not dist/. This pointed at dist/ and so silently served 404
 // for every asset in production — invisible in development, where Vite serves the page instead.
@@ -219,11 +255,27 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                     console.log(`playback ${parsed.phase} ${parsed.id.slice(0, 8)}`);
                     break;
                 case "say":
-                    void speak(parsed.text, parsed.chain).catch((e) => console.error("speak failed:", e));
+                    void speak(parsed.text, parsed.chain ?? config.chain).catch((e) =>
+                        console.error("speak failed:", e),
+                    );
+                    break;
+                case "set-config": {
+                    const { type: _ignored, ...patch } = parsed;
+                    config = { ...config, ...patch };
+                    void saveConfig();
+                    // Back to EVERY renderer including the sender, so the overlay follows the
+                    // preferences window and a second preferences window cannot drift.
+                    broadcast({ type: "config", ...config });
+                    break;
+                }
+                case "get-config":
+                    ws.send(JSON.stringify({ type: "config", ...config } satisfies ServerMsg));
                     break;
             }
         });
     });
+
+    void loadConfig();
 
     server.listen(port, "127.0.0.1", () => {
         console.log(`rasputin daemon on http://127.0.0.1:${port}  (ws /ws)`);

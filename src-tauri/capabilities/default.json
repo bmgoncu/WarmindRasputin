@@ -1,17 +1,28 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Overlay window control and the global summon hotkey. Nothing else — the renderer talks to the daemon over HTTP and WebSocket, not through Tauri.",
-  "windows": ["main"],
+  "description": "Overlay window control and the global summon hotkey. Nothing else \u2014 the renderer talks to the daemon over HTTP and WebSocket, not through Tauri.",
+  "windows": [
+    "main",
+    "preferences"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-show",
     "core:window:allow-hide",
+    "core:window:allow-close",
     "core:window:allow-set-focus",
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-start-dragging",
     "core:window:allow-is-visible",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-center",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:webview:allow-create-webview-window",
     "core:event:default",
+    "core:path:default",
     "global-shortcut:default"
   ]
 }

@@ -174,6 +174,39 @@ link.onClose = () => {
     linkTag.classList.add("bad");
     sendBtn.disabled = true;
 };
+/**
+ * Opaque black behind the orb instead of desktop show-through.
+ *
+ * The renderer clear colour has to change too, not just the CSS: the WebGL canvas is drawn with
+ * alpha, so a page background alone still leaves the canvas itself see-through.
+ */
+function setOpaqueBackground(opaque: boolean): void {
+    const colour = opaque ? "#000" : "transparent";
+    document.documentElement.style.background = colour;
+    document.body.style.background = opaque ? "#000" : inOverlay() ? "transparent" : "#0a0405";
+    renderer.setClearColor(0x000000, opaque ? 1 : 0);
+}
+
+/** Mirrors daemon config into the dev harness controls so the two never disagree. */
+function syncControls(cfg: { shakeScale?: number; outerRadius?: number; joltCount?: number; arcCount?: number }): void {
+    if (cfg.shakeScale !== undefined) {
+        shake.value = String(Math.round(cfg.shakeScale * 100));
+        shakeOut.textContent = `${cfg.shakeScale.toFixed(2)}x`;
+    }
+    if (cfg.outerRadius !== undefined) {
+        reach.value = String(Math.round(cfg.outerRadius * 100));
+        reachOut.textContent = cfg.outerRadius.toFixed(2);
+    }
+    if (cfg.joltCount !== undefined) {
+        jolts.value = String(cfg.joltCount);
+        joltsOut.textContent = String(cfg.joltCount);
+    }
+    if (cfg.arcCount !== undefined) {
+        arcs.value = String(cfg.arcCount);
+        arcsOut.textContent = String(cfg.arcCount);
+    }
+}
+
 link.onMessage = (msg) => {
     switch (msg.type) {
         case "speak":
@@ -199,6 +232,14 @@ link.onMessage = (msg) => {
             if (msg.outerRadius !== undefined) orb.setOuterRadius(msg.outerRadius);
             if (msg.joltCount !== undefined) orb.setJoltCount(msg.joltCount);
             if (msg.arcCount !== undefined) orb.setArcCount(msg.arcCount);
+            if (msg.opaqueBackground !== undefined) setOpaqueBackground(msg.opaqueBackground);
+            if (msg.subtitles !== undefined) {
+                subtitle.setEnabled(msg.subtitles);
+                subBtn.textContent = msg.subtitles ? "subs on" : "subs off";
+            }
+            if (msg.chain !== undefined) chainSel.value = msg.chain;
+            // Keep the dev sliders in step, so the harness and preferences never disagree.
+            syncControls(msg);
             break;
     }
 };
@@ -212,6 +253,11 @@ player.onPhase = (id, phase, ctxLatency) => {
 };
 // Each speech onset launches a shockwave, so consonants read as impulses rather than only as level.
 player.onOnset = (strength) => orb.pulse(0.45 + strength * 0.55);
+link.onOpen = ((prev) => () => {
+    prev?.();
+    // Adopt whatever the daemon already has, so a reloaded overlay is not reset to defaults.
+    link.send({ type: "get-config" });
+})(link.onOpen);
 link.connect();
 
 function submit(): void {

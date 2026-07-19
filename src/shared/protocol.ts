@@ -70,14 +70,29 @@ export interface PulseMsg {
     strength: number;
 }
 
-/** Live tuning from the debug panel, mirrored to every connected renderer. */
-export interface ConfigMsg {
-    type: "config";
+/**
+ * Live tuning, mirrored to every connected renderer.
+ *
+ * Settings travel renderer → daemon → all renderers rather than window-to-window through Tauri.
+ * The preferences window and the overlay are separate webviews with no shared memory, and routing
+ * through the daemon means the same path works in Chrome during development, survives either
+ * window reloading, and gives one place to persist from.
+ */
+export interface OrbConfig {
     idleFloor?: number;
     shakeScale?: number;
     outerRadius?: number;
     joltCount?: number;
     arcCount?: number;
+    /** Opaque black behind the orb instead of desktop show-through. */
+    opaqueBackground?: boolean;
+    subtitles?: boolean;
+    /** Delivery mode used when the daemon speaks without being told one. */
+    chain?: string;
+}
+
+export interface ConfigMsg extends OrbConfig {
+    type: "config";
 }
 
 export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg;
@@ -111,7 +126,17 @@ export interface SayMsg {
     chain?: string;
 }
 
-export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg;
+/** A settings change from the preferences window. The daemon persists it and rebroadcasts. */
+export interface SetConfigMsg extends OrbConfig {
+    type: "set-config";
+}
+
+/** Asks the daemon to send back the current config — how a freshly opened window initialises. */
+export interface GetConfigMsg {
+    type: "get-config";
+}
+
+export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | SetConfigMsg | GetConfigMsg;
 
 /**
  * Narrows an unknown parsed JSON value to a ServerMsg.
@@ -128,5 +153,5 @@ export function isServerMsg(v: unknown): v is ServerMsg {
 export function isClientMsg(v: unknown): v is ClientMsg {
     if (typeof v !== "object" || v === null) return false;
     const t = (v as { type?: unknown }).type;
-    return t === "hello" || t === "playback" || t === "say";
+    return t === "hello" || t === "playback" || t === "say" || t === "set-config" || t === "get-config";
 }

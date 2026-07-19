@@ -51,5 +51,22 @@ export function setupOverlay(controls: HTMLElement[]): boolean {
         setControls(e.payload === true);
     });
 
+    // Move mode covers the window in a drag region.
+    //
+    // A full-window overlay div rather than data-tauri-drag-region on the canvas: the canvas
+    // handles its own pointer events, and a drag region has to be the topmost hit target to work
+    // at all. Shown only in move mode, because a permanent one would swallow every click.
+    const dragLayer = document.createElement("div");
+    dragLayer.setAttribute("data-tauri-drag-region", "");
+    dragLayer.style.cssText =
+        "position:fixed;inset:0;z-index:50;display:none;cursor:grab;" +
+        "border:2px dashed rgba(255,138,60,0.55);border-radius:10px;" +
+        "background:rgba(255,138,60,0.05);box-sizing:border-box";
+    document.body.appendChild(dragLayer);
+
+    void bridge()?.event?.listen("overlay-move-mode", (e) => {
+        dragLayer.style.display = e.payload === true ? "block" : "none";
+    });
+
     return true;
 }

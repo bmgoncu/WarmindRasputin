@@ -255,6 +255,22 @@ the renderer, which loads unchanged from Chrome.
 - **Cmd+Shift+R toggles ambient ↔ interactive**, not show/hide. The orb is meant to be present the
   way a status light is, and an overlay you must summon before it can tell you anything defeats
   the observing half of the project.
+- **It is a menu-bar app**: `ActivationPolicy::Accessory` keeps it out of the Dock and the app
+  switcher, so the tray menu is the only chrome. Quit lives there, since there is no menu bar of
+  its own to quit from.
+- **The tray icon must be a template image.** macOS ignores the colour and paints the alpha shape
+  black on a light menu bar, white on a dark one; without `icon_as_template(true)` the glyph is a
+  black smudge in dark mode. Built from the source glyph with
+  `geq=r=0:g=0:b=0:a='r(X,Y)'` — the white-on-black artwork's red channel becomes the alpha mask.
+  Note `lum(X,Y)` is YUV-only and errors on RGBA input.
+- **`Image::from_path` needs tauri's `image-png` feature.** Without it the tray can only use the
+  compiled-in window icon.
+- **Preferences is a second window with its own vite entry.** `rollupOptions.input` must list
+  `preferences.html`, or it is never built and the window loads a 404.
+- **Settings live in the daemon, not in either window.** The overlay and preferences are separate
+  webviews with no shared memory, so changes travel renderer → daemon → all renderers. That path
+  also works in Chrome, survives a reload of either window, and gives one place to persist from
+  (`cache/config.json`). Window-to-window Tauri events would satisfy none of those.
 
 ## 7. Operational notes
 

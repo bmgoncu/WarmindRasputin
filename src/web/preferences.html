@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Rasputin Preferences</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #16100f; color: #e8d5c8; }
+  body {
+    font: 13px -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    padding: 18px 20px 24px;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+  h2 {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: #a5705a; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #3a201a;
+  }
+  h2:first-of-type { margin-top: 4px; }
+  .row { display: flex; align-items: center; gap: 10px; margin: 11px 0; }
+  .row label { flex: 0 0 118px; color: #c9a892; }
+  .row input[type=range] { flex: 1; accent-color: #ff7a30; }
+  .row .val { flex: 0 0 46px; text-align: right; font-variant-numeric: tabular-nums; color: #f0c0a0; }
+  .row.check label { flex: 1; }
+  input[type=checkbox] { accent-color: #ff7a30; width: 15px; height: 15px; }
+  select, button, input[type=text] {
+    font: inherit; background: #2a1512; color: #e6a883;
+    border: 1px solid #5a2a1e; padding: 5px 9px; border-radius: 4px;
+  }
+  button { cursor: pointer; }
+  button:hover { background: #3a1c17; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .hint { color: #8a6a5c; font-size: 11px; margin: 6px 0 0; line-height: 1.45; }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #status { font-size: 11px; color: #8a6a5c; margin-top: 18px; }
+  #status.bad { color: #ff8a6a; }
+</style>
+</head>
+<body>
+  <h2>Appearance</h2>
+  <div class="row check">
+    <label for="opaque">Opaque black background</label>
+    <input id="opaque" type="checkbox" />
+  </div>
+  <p class="hint">Off: the desktop shows through behind the orb. On: solid black, useful against a
+     busy wallpaper or for recording.</p>
+  <div class="row check">
+    <label for="subs">Show subtitles</label>
+    <input id="subs" type="checkbox" checked />
+  </div>
+
+  <h2>Overlay position</h2>
+  <div class="row check">
+    <label for="movemode">Move mode</label>
+    <input id="movemode" type="checkbox" />
+  </div>
+  <p class="hint">Drag the orb anywhere while this is on. It makes the window accept the cursor, so
+     clicks stop passing through to what is behind it.</p>
+  <div class="bar">
+    <button id="center">Centre on screen</button>
+    <span id="bounds" class="hint"></span>
+  </div>
+
+  <h2>Voice</h2>
+  <div class="row">
+    <label for="chain">Default mode</label>
+    <select id="chain">
+      <option>measured</option>
+      <option>warmind</option>
+      <option>plain</option>
+      <option>og-warmind</option>
+    </select>
+  </div>
+
+  <h2>Orb</h2>
+  <div class="row">
+    <label for="floor">Idle level</label>
+    <input id="floor" type="range" min="0" max="60" />
+    <span class="val" id="floorv"></span>
+  </div>
+  <div class="row">
+    <label for="shake">Speech shake</label>
+    <input id="shake" type="range" min="0" max="200" />
+    <span class="val" id="shakev"></span>
+  </div>
+  <div class="row">
+    <label for="reach">Outer reach</label>
+    <input id="reach" type="range" min="120" max="220" />
+    <span class="val" id="reachv"></span>
+  </div>
+  <div class="row">
+    <label for="jolts">Jolts</label>
+    <input id="jolts" type="range" min="0" max="50" />
+    <span class="val" id="joltsv"></span>
+  </div>
+  <div class="row">
+    <label for="arcs">Arcs</label>
+    <input id="arcs" type="range" min="0" max="30" />
+    <span class="val" id="arcsv"></span>
+  </div>
+
+  <div class="bar" style="margin-top:18px">
+    <button id="reset">Restore defaults</button>
+  </div>
+  <p id="status">connecting…</p>
+
+  <script type="module" src="./preferences.ts"></script>
+</body>
+</html>

@@ -37,6 +37,7 @@
     "active": true,
     "targets": ["app", "dmg"],
     "icon": ["icons/icon.png"],
+    "resources": ["icons/tray-template.png"],
     "macOS": {
       "minimumSystemVersion": "10.15"
     }
