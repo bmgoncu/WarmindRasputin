@@ -207,6 +207,14 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **Never derive the daemon origin from `location` in the overlay.** Tauri serves the page from
+  `tauri://localhost`, so `location.hostname` is `tauri.localhost` — the derived
+  `ws://tauri.localhost:7331` is unresolvable AND outside the CSP.
+- **A CSP-blocked `new WebSocket()` throws SYNCHRONOUSLY.** Because `link.connect()` sits above the
+  render loop at module scope, one bad URL aborted module execution and produced a black window
+  with no orb, visible dev controls, no drag layer and no config — four symptoms, one cause. The
+  orb must never depend on the daemon: the link is wrapped in try/catch.
+- **Tauri's CSP needs `ipc: http://ipc.localhost` in `connect-src`** or every `invoke()` fails.
 - **Homebrew's `rustup` keeps its shims in its own opt dir, not `~/.cargo/bin`.** So
   `brew install rustup && rustup default stable` succeeds while `cargo` stays off PATH, and
   `tauri dev` fails with a bare `cargo metadata … No such file or directory`. The npm scripts go

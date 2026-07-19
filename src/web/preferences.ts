@@ -11,12 +11,19 @@
  */
 
 import { DaemonLink } from "./net/client.js";
+import { inOverlay } from "./overlay.js";
 import { DAEMON_PORT, type OrbConfig } from "../shared/protocol.js";
 
-const DAEMON_ORIGIN =
-    location.port === String(DAEMON_PORT)
-        ? location.origin
-        : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
+/**
+ * Never derived from `location` in the app: Tauri serves from `tauri://localhost`, so
+ * `location.hostname` is `tauri.localhost`, and the resulting `ws://tauri.localhost:7331` is both
+ * unresolvable and blocked by the CSP — which throws synchronously out of `new WebSocket`.
+ */
+const DAEMON_ORIGIN = inOverlay()
+    ? `http://127.0.0.1:${DAEMON_PORT}`
+    : location.port === String(DAEMON_PORT)
+      ? location.origin
+      : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
 
 const DEFAULTS: Required<Pick<OrbConfig, "idleFloor" | "shakeScale" | "outerRadius" | "joltCount" | "arcCount" | "opaqueBackground" | "subtitles" | "chain">> = {
     idleFloor: 0.22,
@@ -100,7 +107,16 @@ link.onClose = () => {
 link.onMessage = (msg) => {
     if (msg.type === "config") render(msg);
 };
-link.connect();
+// Show the defaults immediately. Until the daemon answers `get-config` the controls would
+// otherwise sit at the midpoint of their range with blank readouts, which reads as broken.
+render(DEFAULTS);
+try {
+    link.connect();
+} catch (err) {
+    console.error("daemon link failed to start:", err);
+    el.status.textContent = "daemon offline — run: npm run daemon";
+    el.status.classList.add("bad");
+}
 
 // --- wiring ------------------------------------------------------------------------------
 // `input` rather than `change`, so dragging a slider updates the orb live — the whole reason these
@@ -136,6 +152,24 @@ async function refreshBounds(): Promise<void> {
         el.bounds.textContent = "";
     }
 }
+
+const autostart = $<HTMLInputElement>("autostart");
+async function refreshAutostart(): Promise<void> {
+    const bridge = tauri();
+    if (!bridge?.core) {
+        autostart.disabled = true;
+        return;
+    }
+    try {
+        autostart.checked = (await bridge.core.invoke("get_autostart")) === true;
+    } catch {
+        autostart.disabled = true;
+    }
+}
+autostart.addEventListener("change", () => {
+    void tauri()?.core?.invoke("set_autostart", { enabled: autostart.checked }).catch(() => refreshAutostart());
+});
+void refreshAutostart();
 
 el.moveMode.addEventListener("change", () => {
     void tauri()?.core?.invoke("set_move_mode", { enabled: el.moveMode.checked });

@@ -263,6 +263,11 @@ the renderer, which loads unchanged from Chrome.
   black smudge in dark mode. Built from the source glyph with
   `geq=r=0:g=0:b=0:a='r(X,Y)'` — the white-on-black artwork's red channel becomes the alpha mask.
   Note `lum(X,Y)` is YUV-only and errors on RGBA input.
+- **The renderer must not derive the daemon origin from `location`.** In Tauri `location.hostname`
+  is `tauri.localhost`; the resulting WebSocket URL is unresolvable and outside the CSP, and a
+  CSP-blocked `new WebSocket()` throws synchronously — aborting module execution before the render
+  loop starts. Use `127.0.0.1` explicitly when `inOverlay()`.
+- **`connect-src` must include `ipc: http://ipc.localhost`** or every Tauri `invoke()` fails.
 - **`Image::from_path` needs tauri's `image-png` feature.** Without it the tray can only use the
   compiled-in window icon.
 - **Preferences is a second window with its own vite entry.** `rollupOptions.input` must list

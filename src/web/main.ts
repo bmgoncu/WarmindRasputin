@@ -145,15 +145,24 @@ function simulatedLevel(t: number): number {
 }
 
 // --- daemon link ------------------------------------------------------------------------
-// In dev the page is served by Vite on 7332 while the daemon listens on 7331, so the origin has
-// to be named explicitly. When the daemon serves the built page itself (the Tauri path) they are
-// the same origin and location wins.
-const DAEMON_ORIGIN =
-    location.port === String(DAEMON_PORT) ? location.origin : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
+/**
+ * Where the daemon lives.
+ *
+ * Never derived from `location` in the overlay. Tauri serves the page from `tauri://localhost`, so
+ * `location.hostname` is `tauri.localhost` — deriving from it produced
+ * `ws://tauri.localhost:7331`, which the CSP's connect-src does not allow, and **a CSP-blocked
+ * `new WebSocket()` throws synchronously**. That killed module execution at `link.connect()`,
+ * which sits above the render loop: no orb, no overlay setup, no drag layer, all from one bad URL.
+ */
+const DAEMON_ORIGIN = inOverlay()
+    ? `http://127.0.0.1:${DAEMON_PORT}`
+    : location.port === String(DAEMON_PORT)
+      ? location.origin
+      : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
 
 const player = new SpeechPlayer();
 const subtitle = new Subtitle();
-const link = new DaemonLink(`${DAEMON_ORIGIN.replace(/^http/, "ws")}/ws`, "chrome-dev");
+const link = new DaemonLink(`${DAEMON_ORIGIN.replace(/^http/, "ws")}/ws`, inOverlay() ? "tauri-overlay" : "chrome-dev");
 const textInput = document.getElementById("text") as HTMLInputElement;
 const chainSel = document.getElementById("chain") as HTMLSelectElement;
 const sendBtn = document.getElementById("send") as HTMLButtonElement;
@@ -258,7 +267,14 @@ link.onOpen = ((prev) => () => {
     // Adopt whatever the daemon already has, so a reloaded overlay is not reset to defaults.
     link.send({ type: "get-config" });
 })(link.onOpen);
-link.connect();
+// The orb must survive a dead or unreachable daemon. Anything thrown here would otherwise abort
+// the module before the render loop starts — which is exactly how a bad WebSocket URL produced a
+// black window.
+try {
+    link.connect();
+} catch (err) {
+    console.error("daemon link failed to start:", err);
+}
 
 function submit(): void {
     const text = textInput.value.trim();

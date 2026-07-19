@@ -49,6 +49,14 @@
     <input id="subs" type="checkbox" checked />
   </div>
 
+  <h2>Startup</h2>
+  <div class="row check">
+    <label for="autostart">Launch at login</label>
+    <input id="autostart" type="checkbox" />
+  </div>
+  <p class="hint">Starts the overlay when you log in. The daemon is separate — run it yourself or
+     add <code>npm run daemon</code> to your own login items.</p>
+
   <h2>Overlay position</h2>
   <div class="row check">
     <label for="movemode">Move mode</label>
@@ -75,27 +83,27 @@
   <h2>Orb</h2>
   <div class="row">
     <label for="floor">Idle level</label>
-    <input id="floor" type="range" min="0" max="60" />
+    <input id="floor" type="range" min="0" max="60" value="22" />
     <span class="val" id="floorv"></span>
   </div>
   <div class="row">
     <label for="shake">Speech shake</label>
-    <input id="shake" type="range" min="0" max="200" />
+    <input id="shake" type="range" min="0" max="200" value="100" />
     <span class="val" id="shakev"></span>
   </div>
   <div class="row">
     <label for="reach">Outer reach</label>
-    <input id="reach" type="range" min="120" max="220" />
+    <input id="reach" type="range" min="120" max="220" value="178" />
     <span class="val" id="reachv"></span>
   </div>
   <div class="row">
     <label for="jolts">Jolts</label>
-    <input id="jolts" type="range" min="0" max="50" />
+    <input id="jolts" type="range" min="0" max="50" value="5" />
     <span class="val" id="joltsv"></span>
   </div>
   <div class="row">
     <label for="arcs">Arcs</label>
-    <input id="arcs" type="range" min="0" max="30" />
+    <input id="arcs" type="range" min="0" max="30" value="3" />
     <span class="val" id="arcsv"></span>
   </div>
 

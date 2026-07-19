@@ -23,6 +23,7 @@
     "core:webview:allow-create-webview-window",
     "core:event:default",
     "core:path:default",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "autostart:default"
   ]
 }

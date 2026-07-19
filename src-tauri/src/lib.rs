@@ -16,6 +16,7 @@ use tauri::{
     tray::TrayIconBuilder,
     Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
+use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 /// Live window state.
@@ -80,6 +81,26 @@ fn center_overlay(app: tauri::AppHandle) -> Result<(), String> {
     app.get_webview_window("main").ok_or("main window missing")?.center().map_err(|e| e.to_string())
 }
 
+/// Launch at login.
+///
+/// Registers the app itself, not the daemon — the daemon is a separate Node process with its own
+/// lifecycle, and silently adding a background server to someone's login items is not a decision
+/// an overlay checkbox should make. Preferences says so.
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())
+    } else {
+        manager.disable().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> bool {
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
 /// Opens preferences, or focuses it if already open.
 ///
 /// A separate window rather than a panel inside the overlay: the overlay is click-through and
@@ -103,6 +124,10 @@ pub fn run() {
     tauri::Builder::default()
         .manage(OverlayState { click_through: std::sync::Mutex::new(true) })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             set_click_through,
             is_click_through,
@@ -110,7 +135,9 @@ pub fn run() {
             get_overlay_bounds,
             set_overlay_bounds,
             center_overlay,
-            open_preferences
+            open_preferences,
+            set_autostart,
+            get_autostart
         ])
         .setup(|app| {
             // Menu-bar app: no Dock icon, no app-switcher entry. Accessory is what makes the tray
