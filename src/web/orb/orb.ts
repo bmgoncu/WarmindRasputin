@@ -16,7 +16,7 @@
  */
 
 import * as THREE from "three";
-import { NodeGraph } from "./graph.js";
+import { NodeGraph, type Pulse } from "./graph.js";
 
 const COL_IDLE = new THREE.Color(0xff5410);
 const COL_MID = new THREE.Color(0xff8a30);
@@ -33,6 +33,11 @@ export class Orb {
     private readonly rays!: THREE.LineSegments;
     private readonly streaks: THREE.LineSegments;
     private readonly streakSeed: Float32Array;
+
+    /** In-flight shockwaves. Launched irregularly — see update(). */
+    private readonly pulses: Pulse[] = [];
+    private nextPulse = 0.6;
+    private frozen = false;
 
     private level = 0;
     private readonly warm = new THREE.Color();
@@ -151,6 +156,10 @@ export class Orb {
             centreBoost: 2.2,
             gradientRadius: 0.72,
             volumeFill: 0.9,
+            worldRadius: 1.6,
+            pushScale: 0.05,
+            joltInterval: 0,
+            maxJolts: 0,
             colour: 0xffb070,
             seed: 4242,
         });
@@ -170,7 +179,16 @@ export class Orb {
             spin: -0.045,
             centreBoost: 0.5,
             gradientRadius: 1.45,
-            volumeFill: 0.04,
+            // Given radial THICKNESS on purpose. At 0.04 this was a one-node-thick shell, so a
+            // radial wave lit every node at the same instant — the pingpong. With depth, the
+            // front sweeps through it over time.
+            volumeFill: 0.32,
+            worldRadius: 1.6,
+            // Outer shell takes the visible push; the inner volume moves less.
+            pushScale: 0.13,
+            // Electric jolts walk the outer shell only.
+            joltInterval: 1.6,
+            maxJolts: 3,
             colour: 0xff5f26,
             seed: 90210,
         });
@@ -234,6 +252,31 @@ export class Orb {
         this.group.add(this.haze, this.core, this.rays, this.inner.group, this.shell, this.outer.group, this.streaks);
     }
 
+    /** Live state for the dev harness. */
+    /** Dev only — draws only the jolt segments, against black. See NodeGraph.solo. */
+    solo(): void {
+        this.freeze();
+        this.core.visible = false;
+        this.shell.visible = false;
+        this.haze.visible = false;
+        this.rays.visible = false;
+        this.streaks.visible = false;
+        this.inner.solo();
+        this.outer.solo();
+    }
+
+    /** Dev only — see NodeGraph.freeze. Also stops pulses, leaving jolts as the only motion. */
+    freeze(): void {
+        this.inner.freeze();
+        this.outer.freeze();
+        this.frozen = true;
+        this.pulses.length = 0;
+    }
+
+    get debug(): Record<string, unknown> {
+        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this.level };
+    }
+
     /** VU ballistics — fast attack, slow release, frame-rate independent. */
     setLevel(target: number, dt: number): void {
         const tau = (target > this.level ? 30 : 220) / 1000;
@@ -242,6 +285,7 @@ export class Orb {
 
     update(dt: number, t: number): void {
         const L = this.level;
+        this.updatePulses(dt, L);
 
         this.warm.copy(COL_IDLE).lerp(COL_MID, Math.min(1, L * 1.8));
         // Capped at 0.75 — lerping fully to hot turned the whole orb cream and lost the orange.
@@ -259,12 +303,45 @@ export class Orb {
         this.rays.rotation.z += 0.05 * dt;
         (this.rays.material as THREE.LineBasicMaterial).opacity = 0.14 + L * 0.26;
 
-        this.inner.update(dt, t, L, this.warm);
-        this.outer.update(dt, t, L, this.warm);
+        this.inner.update(dt, t, L, this.warm, this.pulses);
+        this.outer.update(dt, t, L, this.warm, this.pulses);
+
+        // Breathing is NOT a uniform scale. Scaling the group moves every node in lockstep,
+        // which reads as a pingpong; the reference shows a swell that crosses the structure and
+        // dissipates. That now comes from the same wave fronts that drive the brightness pulses,
+        // displacing nodes radially as they pass — see GraphOptions.pushScale.
 
         // Subtle — the reference lights up, it doesn't inflate.
         this.group.scale.setScalar(1 + L * 0.05);
         this.updateStreaks(t, L);
+    }
+
+    /**
+     * Launches shockwaves at irregular intervals and ages the ones in flight.
+     *
+     * Interval is randomized rather than fixed — the reference launches these erratically, and a
+     * metronome reads as a loading spinner. Speaking makes them both more frequent and stronger.
+     */
+    private updatePulses(dt: number, level: number): void {
+        if (this.frozen) return;
+        this.nextPulse -= dt * (1 + level * 1.8);
+        if (this.nextPulse <= 0) {
+            this.nextPulse = 1.1 + Math.random() * 2.4;
+            this.pulses.push({
+                age: 0,
+                // A pulse should take a couple of seconds to cross, not a fraction of one.
+                // The ring-delta measurement suggested ~0.35s, but that metric tracks a noisy
+                // per-frame brightness peak that jumps between rings — it reported motion much
+                // faster than the wave actually travels. Watching the reference is the better
+                // instrument here.
+                life: 1.8 + Math.random() * 1.2,
+                strength: 0.5 + Math.random() * 0.5,
+            });
+        }
+        for (let i = this.pulses.length - 1; i >= 0; i--) {
+            this.pulses[i].age += dt;
+            if (this.pulses[i].age >= this.pulses[i].life) this.pulses.splice(i, 1);
+        }
     }
 
     private updateStreaks(t: number, level: number): void {

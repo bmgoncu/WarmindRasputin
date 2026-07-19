@@ -75,6 +75,13 @@ function simulatedLevel(t: number): number {
     return Math.min(1, syllable * phrase * gate);
 }
 
+// Dev harness hook: lets tools/shoot.ts and ad-hoc checks read live orb state instead of
+// inferring it from pixels. readPixels returns empty after frame present unless
+// preserveDrawingBuffer is set, so pixel-sampling gives false negatives.
+(window as unknown as { __orb: () => unknown }).__orb = () => orb.debug;
+(window as unknown as { __freeze: () => void }).__freeze = () => orb.freeze();
+(window as unknown as { __solo: () => void }).__solo = () => orb.solo();
+
 const clock = new THREE.Clock();
 function frame(): void {
     const dt = Math.min(clock.getDelta(), 0.05);

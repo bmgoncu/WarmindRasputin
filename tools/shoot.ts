@@ -38,6 +38,18 @@ async function main(): Promise<void> {
     }, level);
     await page.waitForTimeout(1400);
 
+    // ORB_FREEZE=1 stops drift, spin and pulses so a frame-difference image isolates the jolts.
+    if (process.env.ORB_FREEZE === "1") {
+        await page.evaluate(() => (window as unknown as { __freeze: () => void }).__freeze());
+        await page.waitForTimeout(250);
+    }
+    // ORB_SOLO=1 draws jolt segments alone against black — the only way to read their shape,
+    // since against the full graph they are indistinguishable from warm edges.
+    if (process.env.ORB_SOLO === "1") {
+        await page.evaluate(() => (window as unknown as { __solo: () => void }).__solo());
+        await page.waitForTimeout(700);
+    }
+
     // Report whether WebGL actually initialized — a blank screenshot is otherwise ambiguous
     // between "nothing rendered" and "rendered black".
     const info = await page.evaluate(() => {
@@ -46,7 +58,18 @@ async function main(): Promise<void> {
         return { webgl2: !!gl, w: c.width, h: c.height };
     });
 
-    await page.locator("#orb").screenshot({ path: out });
+    // Burst mode: several frames from ONE page load, so the sequence is temporally continuous
+    // and can be analysed for motion the same way the reference video was.
+    const burst = Number(process.env.ORB_BURST ?? 0);
+    if (burst > 0) {
+        const gapMs = Number(process.env.ORB_BURST_GAP ?? 150);
+        for (let i = 0; i < burst; i++) {
+            await page.locator("#orb").screenshot({ path: out.replace(/\.png$/, `-${String(i).padStart(2, "0")}.png`) });
+            await page.waitForTimeout(gapMs);
+        }
+    } else {
+        await page.locator("#orb").screenshot({ path: out });
+    }
     await browser.close();
 
     console.log(`  ${out}  level=${level}  webgl2=${info.webgl2}  canvas=${info.w}x${info.h}`);

@@ -20,6 +20,56 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 
+/**
+ * A shockwave travelling outward from the core.
+ *
+ * Measured from the reference: brightening marches from ring 0 to ring 5 in roughly 0.35s, but
+ * only on ~40% of frame steps — so these are discrete pulses launched irregularly, not a
+ * continuous ripple. Nodes and edges light up as the front passes them.
+ */
+export interface Pulse {
+    /** Seconds since launch. */
+    age: number;
+    /** Seconds to cross the whole orb. */
+    life: number;
+    /** Peak strength, 0-1. */
+    strength: number;
+}
+
+/**
+ * An electric jolt walking the graph edge by edge.
+ *
+ * Distinct from a Pulse: a pulse is radial and geometric — it sweeps a sphere of radius outward
+ * regardless of structure. A jolt is TOPOLOGICAL, hopping node to node along actual edges, so it
+ * traces the network like current finding a path.
+ *
+ * The lit region is a SEGMENT with a head and a tail, carved out of the path by arc length — so
+ * an edge is partially lit and the bright part visibly slides along it:
+ *
+ *     N....***N**...N        head mid-edge, tail spilling back over the previous node
+ *     N***...N...            head near a node, tail behind it
+ *
+ * Lighting whole edges instead makes it read as edges switching on and off in sequence, which is
+ * a different effect entirely — no motion within an edge, so nothing appears to travel.
+ */
+interface Jolt {
+    /** Nodes visited, oldest first. The lit segment is carved out of this path. */
+    path: number[];
+    /** Node currently being travelled toward. */
+    next: number;
+    /** 0-1 along the edge from path[last] to next. */
+    t: number;
+    /** Edges traversed per second. */
+    speed: number;
+    /** Remaining lifetime in seconds. */
+    life: number;
+    /** Edges traversed so far — distance travelled, since `path` is trimmed to the tail window. */
+    hops: number;
+    /** Length of the lit segment, in edge-lengths. Below 1 it sits inside a single edge. */
+    tail: number;
+    strength: number;
+}
+
 export interface GraphOptions {
     nodeCount: number;
     radius: number;
@@ -37,6 +87,10 @@ export interface GraphOptions {
     rebuildInterval: number;
     /** Radians/sec about Y. */
     spin: number;
+    /** Mean seconds between jolt spawns. 0 disables them. */
+    joltInterval: number;
+    /** Cap on simultaneous jolts. */
+    maxJolts: number;
     /**
      * How strongly brightness rises toward the centre, 0–1.
      *
@@ -47,6 +101,25 @@ export interface GraphOptions {
     centreBoost: number;
     /** Radius used to normalize the centre gradient — usually the graph's own radius. */
     gradientRadius: number;
+    /**
+     * Radius the wave front is measured against — the WHOLE orb's extent, not this graph's.
+     *
+     * Normalizing per-graph was a bug: the outer graph is a thin shell, so every one of its nodes
+     * sat at nr ~= 1.0 and the front reached all of them in the same instant. The entire layer
+     * flashed together, which reads as a pingpong rather than a wave. Measuring against a shared
+     * world radius makes one coherent front travel through the inner volume and then the outer
+     * shell.
+     */
+    worldRadius: number;
+    /**
+     * How far a passing wave front pushes nodes outward, as a fraction of radius.
+     *
+     * This is what makes the breathing a travelling WAVE rather than a pingpong. Scaling the
+     * whole group up and down moves every node in lockstep, which reads as mechanical pumping;
+     * displacing nodes only where the front currently is makes the swell visibly cross the
+     * structure and dissipate behind itself.
+     */
+    pushScale: number;
     /**
      * 0 = every node sits on the shell surface, 1 = nodes fill the interior volume.
      *
@@ -100,6 +173,37 @@ interface Edge {
 export class NodeGraph {
     readonly group = new THREE.Group();
 
+    /** Dev only: draws jolt segments and nothing else, so their shape can be read directly. */
+    solo(): void {
+        this.soloJolts = true;
+    }
+
+    /**
+     * Dev only: stops drift, spin and edge rebuilds.
+     *
+     * Everything in this scene moves at once, so a frame-difference image shows the whole graph
+     * lit up and reveals nothing about any single system. Freezing the ambient motion leaves only
+     * the system under test — jolts, waves — visible in the diff.
+     */
+    freeze(): void {
+        this.opts.drift = 0;
+        this.opts.driftSpeed = 0;
+        this.opts.spin = 0;
+        this.opts.rebuildInterval = 1e9;
+    }
+
+    /** Live counts for the dev harness — see window.__orb in main.ts. */
+    get debug(): { jolts: number; edges: number; nodes: number; litEdges: number; hops: number[]; stat: Record<string, number> } {
+        return {
+            jolts: this.jolts.length,
+            edges: this.edges.length,
+            nodes: this.opts.nodeCount,
+            litEdges: this.jolts.reduce((n, j) => n + Math.ceil(j.tail) + 1, 0),
+            hops: this.jolts.map((j) => j.hops),
+            stat: { ...this.joltStat },
+        };
+    }
+
     private readonly opts: GraphOptions;
     private readonly base: Float32Array;
     private readonly driftPhase: Float32Array;
@@ -108,8 +212,18 @@ export class NodeGraph {
     /** Per-node flare phase, and the live per-frame flare value fed to the shader. */
     private readonly nodeFlare: Float32Array;
     private readonly nodeGain: Float32Array;
+    /** Undisplaced radius per node, so the gradient is immune to the push wave. */
+    private readonly nodeRest: Float32Array;
 
     private edges: Edge[] = [];
+    /** node -> connected node indices. Rebuilt with the edge set; jolts walk this. */
+    private adjacency: number[][] = [];
+    private jolts: Jolt[] = [];
+    private nextJolt = 1.5;
+    private joltStat = { spawned: 0, expired: 0, isolated: 0, rewired: 0, culled: 0 };
+    private soloJolts = false;
+    /** Per-node jitter offset applied by active jolts, in world units. */
+    private readonly jitter: Float32Array;
     private sinceRebuild = 0;
 
     private readonly lines: THREE.LineSegments;
@@ -139,6 +253,8 @@ export class NodeGraph {
         this.nodeBright = new Float32Array(n);
         this.nodeFlare = new Float32Array(n);
         this.nodeGain = new Float32Array(n);
+        this.nodeRest = new Float32Array(n);
+        this.jitter = new Float32Array(n * 3);
 
         // Fibonacci sphere for even angular coverage, then pushed onto the superellipsoid.
         // Purely random directions leave visible clumps and voids at these counts.
@@ -251,6 +367,8 @@ export class NodeGraph {
         // Nodes are round bright dots in the reference — Points is correct here, unlike streaks.
         const ptGeom = new THREE.BufferGeometry();
         ptGeom.setAttribute("position", new THREE.BufferAttribute(this.nodePos, 3));
+        // Rest radius, independent of wave displacement — see aRest in the shader.
+        ptGeom.setAttribute("aRest", new THREE.BufferAttribute(this.nodeRest, 1));
         ptGeom.setAttribute("aBright", new THREE.BufferAttribute(this.nodeBright, 1));
         ptGeom.setAttribute("aFlare", new THREE.BufferAttribute(this.nodeGain, 1));
         const ptMat = new THREE.ShaderMaterial({
@@ -265,13 +383,14 @@ export class NodeGraph {
             vertexShader: /* glsl */ `
                 attribute float aBright;
                 attribute float aFlare;
+                attribute float aRest;
                 uniform float uSize;
                 uniform float uBoost;
                 uniform float uRadius;
                 varying float vB;
                 varying float vFlare;
                 void main() {
-                    float r = clamp(length(position) / uRadius, 0.0, 1.0);
+                    float r = clamp(aRest / uRadius, 0.0, 1.0);
                     vB = aBright * mix(1.0, 1.0 + uBoost * 3.2, pow(1.0 - r, 2.2));
                     vFlare = aFlare;
                     vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -339,10 +458,179 @@ export class NodeGraph {
             }
         }
         this.edges = next;
+
+        this.adjacency = Array.from({ length: this.opts.nodeCount }, () => [] as number[]);
+        for (const e of next) {
+            this.adjacency[e.a].push(e.b);
+            this.adjacency[e.b].push(e.a);
+        }
+        // A jolt whose current edge vanished in the rebuild would walk into nothing.
+        // A rebuild rewires edges under any jolt in flight. Killing those jolts caps their travel
+        // at the rebuild interval no matter how long their lifetime is — so instead they REROUTE:
+        // pick a new neighbour from the node they last passed. Only a node left isolated ends one.
+        this.jolts = this.jolts.filter((j) => {
+            const here = j.path[j.path.length - 1];
+            const nbrs = this.adjacency[here];
+            if (!nbrs || nbrs.length === 0) {
+                this.joltStat.culled++;
+                return false;
+            }
+            if (nbrs.includes(j.next)) return true;
+            const opts = nbrs.length > 1 ? nbrs.filter((x) => x !== j.path[j.path.length - 2]) : nbrs;
+            j.next = opts[Math.floor(Math.random() * opts.length)];
+            this.joltStat.rewired++;
+            return true;
+        });
+    }
+
+    /**
+     * Spawns, advances and expires jolts, and accumulates the node jitter they cause.
+     *
+     * Jitter is written into a buffer rather than applied directly because node positions are
+     * recomputed from base + drift + wave push every frame; the jolt contribution has to be added
+     * on top of that rather than fighting it.
+     */
+    private updateJolts(dt: number, level: number): void {
+        const o = this.opts;
+        this.jitter.fill(0);
+        if (o.joltInterval <= 0) return;
+
+        this.nextJolt -= dt * (1 + level * 1.5);
+        if (this.nextJolt <= 0 && this.jolts.length < o.maxJolts) {
+            // Randomized, not fixed — evenly spaced jolts read as a metronome.
+            this.nextJolt = o.joltInterval * (0.45 + Math.random() * 1.5);
+            const start = Math.floor(Math.random() * o.nodeCount);
+            const nbrs = this.adjacency[start];
+            if (nbrs && nbrs.length > 0) {
+                this.jolts.push({
+                    path: [start],
+                    next: nbrs[Math.floor(Math.random() * nbrs.length)],
+                    t: 0,
+                    hops: 0,
+                    speed: 7 + Math.random() * 8,
+                    life: 2.2 + Math.random() * 2.6,
+                    tail: 0.45 + Math.random() * 0.5,
+                    strength: 0.6 + Math.random() * 0.4,
+                });
+                this.joltStat.spawned++;
+            }
+        }
+
+        for (let i = this.jolts.length - 1; i >= 0; i--) {
+            const j = this.jolts[i];
+            j.life -= dt;
+            j.t += j.speed * dt;
+
+            while (j.t >= 1) {
+                j.t -= 1;
+                const nbrs = this.adjacency[j.next];
+                if (!nbrs || nbrs.length === 0) {
+                    j.life = 0;
+                    this.joltStat.isolated++;
+                    break;
+                }
+                const prev = j.path[j.path.length - 1];
+                // Prefer not to backtrack — a jolt oscillating on one edge reads as a stuck
+                // light rather than as current travelling.
+                const options = nbrs.length > 1 ? nbrs.filter((x) => x !== prev) : nbrs;
+                j.hops++;
+                j.path.push(j.next);
+                j.next = options[Math.floor(Math.random() * options.length)];
+                // Only as much history as the tail can reach back through.
+                while (j.path.length > Math.ceil(j.tail) + 2) j.path.shift();
+            }
+
+            if (j.life <= 0) {
+                if (j.life > -dt) this.joltStat.expired++;
+                this.jolts.splice(i, 1);
+                continue;
+            }
+
+            // Jitter only the nodes the lit segment is actually near, so the disturbance
+            // travels with the jolt instead of shaking its whole path.
+            const amp = 0.014 * o.radius * j.strength;
+            const touch = [j.next, j.path[j.path.length - 1], j.path[j.path.length - 2]];
+            for (const idx of touch) {
+                if (idx === undefined || idx < 0) continue;
+                this.jitter[idx * 3 + 0] += (Math.random() - 0.5) * amp;
+                this.jitter[idx * 3 + 1] += (Math.random() - 0.5) * amp;
+                this.jitter[idx * 3 + 2] += (Math.random() - 0.5) * amp;
+            }
+        }
+    }
+
+    /**
+     * Emits the lit sub-segments for every jolt.
+     *
+     * Walks backward from the head along the path, consuming `tail` edge-lengths and clipping to
+     * each edge as it goes. A tail shorter than one edge stays inside that edge; a longer one
+     * spills back across nodes into earlier edges.
+     */
+    private emitJoltSegments(pts: number[], cols: number[]): void {
+        const pos = this.nodePos;
+        const at = (i: number, out: [number, number, number]): void => {
+            out[0] = pos[i * 3];
+            out[1] = pos[i * 3 + 1];
+            out[2] = pos[i * 3 + 2];
+        };
+        const A: [number, number, number] = [0, 0, 0];
+        const B: [number, number, number] = [0, 0, 0];
+
+        for (const j of this.jolts) {
+            let remaining = j.tail;
+            // Head sits between path[last] and next, at fraction t.
+            let hiNode = j.next;
+            let loNode = j.path[j.path.length - 1];
+            let hiFrac = j.t;
+            let pathIdx = j.path.length - 1;
+            // Arc distance from the head to the current piece's leading end. Brightness is a
+            // function of this, so it has to accumulate across pieces — measuring within each
+            // piece independently restarts the ramp at every node and reads as a dashed line.
+            let behind = 0;
+            // Fade the whole jolt in and out so it doesn't pop at spawn or death.
+            const envelope = Math.min(1, j.life * 2.5, (j.tail + 0.3) * 2);
+
+            while (remaining > 0 && loNode !== undefined) {
+                const span = Math.min(remaining, hiFrac);
+                const loFrac = hiFrac - span;
+                at(loNode, A);
+                at(hiNode, B);
+
+                // Sub-divide so the segment is brightest at the head and fades toward the tail.
+                const STEPS = 4;
+                for (let k = 0; k < STEPS; k++) {
+                    const f0 = loFrac + ((hiFrac - loFrac) * k) / STEPS;
+                    const f1 = loFrac + ((hiFrac - loFrac) * (k + 1)) / STEPS;
+                    // Distance behind the head at this piece's midpoint. The head is at hiFrac of
+                    // the FIRST piece, so distance grows as f decreases and as `behind` climbs.
+                    const dHead = behind + (hiFrac - (f0 + f1) / 2);
+                    // ^1.6 keeps the hot part concentrated near the head rather than smearing the
+                    // brightness evenly along the tail, which is what makes it read as a spark
+                    // dragging a trail instead of a uniformly glowing stick.
+                    const fadeK = (1 - Math.min(1, dHead / j.tail)) ** 1.6;
+                    const g = j.strength * envelope * (0.18 + fadeK * 3.5);
+                    pts.push(
+                        A[0] + (B[0] - A[0]) * f0, A[1] + (B[1] - A[1]) * f0, A[2] + (B[2] - A[2]) * f0,
+                        A[0] + (B[0] - A[0]) * f1, A[1] + (B[1] - A[1]) * f1, A[2] + (B[2] - A[2]) * f1,
+                    );
+                    // Electric: near-white leaning cold, distinct from the warm drift edges.
+                    cols.push(g, g * 0.95, g * 0.82, g, g * 0.95, g * 0.82);
+                }
+
+                remaining -= span;
+                behind += span;
+                if (remaining <= 0) break;
+                // Spill back into the previous edge.
+                hiNode = loNode;
+                pathIdx -= 1;
+                loNode = j.path[pathIdx];
+                hiFrac = 1;
+            }
+        }
     }
 
     /** `level` 0–1 scales brightness and, mildly, how far nodes push outward. */
-    update(dt: number, t: number, level: number, colour: THREE.Color): void {
+    update(dt: number, t: number, level: number, colour: THREE.Color, pulses: Pulse[] = []): void {
         const o = this.opts;
         const n = o.nodeCount;
         const swell = 1 + level * 0.06;
@@ -350,21 +638,67 @@ export class NodeGraph {
         for (let i = 0; i < n; i++) {
             const d = o.drift * o.radius;
             const sp = o.driftSpeed;
-            this.nodePos[i * 3 + 0] =
-                (this.base[i * 3 + 0] + Math.sin(t * sp + this.driftPhase[i * 3 + 0]) * d) * swell;
-            this.nodePos[i * 3 + 1] =
-                (this.base[i * 3 + 1] + Math.sin(t * sp * 0.83 + this.driftPhase[i * 3 + 1]) * d) * swell;
-            this.nodePos[i * 3 + 2] =
-                (this.base[i * 3 + 2] + Math.sin(t * sp * 1.17 + this.driftPhase[i * 3 + 2]) * d) * swell;
+            const bx = this.base[i * 3 + 0] + Math.sin(t * sp + this.driftPhase[i * 3 + 0]) * d;
+            const by = this.base[i * 3 + 1] + Math.sin(t * sp * 0.83 + this.driftPhase[i * 3 + 1]) * d;
+            const bz = this.base[i * 3 + 2] + Math.sin(t * sp * 1.17 + this.driftPhase[i * 3 + 2]) * d;
+
+            // Radial displacement from any wave front currently crossing this node's radius.
+            // The push band is wider than the brightness band so the swell feels like a body of
+            // motion rather than a hard shell hitting each node.
+            let push = 0;
+            if (pulses.length > 0 && o.pushScale > 0) {
+                const nr = Math.hypot(bx, by, bz) / o.worldRadius;
+                for (const p of pulses) {
+                    const front = (p.age / p.life) * 1.25;
+                    const dist = Math.abs(nr - front);
+                    if (dist < 0.16) {
+                        const shape = Math.cos((dist / 0.16) * Math.PI * 0.5); // smooth, no edge
+                        push += shape * p.strength * (1 - p.age / p.life) * o.pushScale;
+                    }
+                }
+            }
+
+            this.nodeRest[i] = Math.hypot(bx, by, bz);
+            const k = swell * (1 + push);
+            this.nodePos[i * 3 + 0] = bx * k + this.jitter[i * 3 + 0];
+            this.nodePos[i * 3 + 1] = by * k + this.jitter[i * 3 + 1];
+            this.nodePos[i * 3 + 2] = bz * k + this.jitter[i * 3 + 2];
         }
         (this.points.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+        (this.points.geometry.getAttribute("aRest") as THREE.BufferAttribute).needsUpdate = true;
 
         // Node flares: 0 most of the time, briefly approaching 1. Subtle by request — the
         // visible effect is a warm yellow tint and a modest lift, not a pop.
+        //
+        // Pulse fronts add on top: a node lights when a front is passing its radius. The band is
+        // narrow so the wave reads as a travelling ring rather than a general brightening.
         for (let i = 0; i < n; i++) {
-            this.nodeGain[i] = Math.pow(Math.max(0, Math.sin(t * 0.42 + this.nodeFlare[i])), 18);
+            let g = Math.pow(Math.max(0, Math.sin(t * 0.42 + this.nodeFlare[i])), 18);
+            if (pulses.length > 0) {
+                const nr = Math.hypot(
+                    this.nodePos[i * 3], this.nodePos[i * 3 + 1], this.nodePos[i * 3 + 2],
+                ) / o.worldRadius;
+                for (const p of pulses) {
+                    const front = (p.age / p.life) * 1.25;   // travels past the rim before dying
+                    const d = Math.abs(nr - front);
+                    if (d < 0.1) {
+                        // Fades as the front expands, so a pulse dissipates rather than
+                        // reaching the rim at full strength.
+                        const falloff = 1 - p.age / p.life;
+                        g = Math.min(2.2, g + (1 - d / 0.1) * p.strength * falloff * 2.4);
+                    }
+                }
+            }
+            // Nodes the lit head is passing light hard; the one behind it less so.
+            for (const j of this.jolts) {
+                if (j.next === i) g = Math.max(g, 1.4 * j.strength * j.t);
+                else if (j.path[j.path.length - 1] === i) g = Math.max(g, 1.3 * j.strength * (1 - j.t));
+            }
+            this.nodeGain[i] = g;
         }
         (this.points.geometry.getAttribute("aBright") as THREE.BufferAttribute).needsUpdate = true;
+
+        this.updateJolts(dt, level);
 
         this.sinceRebuild += dt;
         if (this.sinceRebuild >= o.rebuildInterval) {
@@ -413,8 +747,20 @@ export class NodeGraph {
 
             // Past the threshold an edge also gets drawn thick. Brightness ramps from the
             // threshold rather than from 0, so edges thicken in smoothly instead of popping.
-            if (warmth > 0.35) {
-                const g = ((warmth - 0.35) / 0.65) * a * 2.2;
+            // A passing front also thickens edges, which is what makes the wave visible as
+            // structure rather than only as brighter dots.
+            let pulseBoost = 0;
+            if (pulses.length > 0) {
+                const mr = Math.hypot((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2) / o.worldRadius;
+                for (const p of pulses) {
+                    const front = (p.age / p.life) * 1.25;
+                    const d = Math.abs(mr - front);
+                    if (d < 0.1) pulseBoost = Math.max(pulseBoost, (1 - d / 0.1) * p.strength * (1 - p.age / p.life));
+                }
+            }
+
+            if (!this.soloJolts && (warmth > 0.35 || pulseBoost > 0.25)) {
+                const g = Math.max((warmth - 0.35) / 0.65, pulseBoost) * a * 2.2;
                 thickPts.push(ax, ay, az, bx, by, bz);
                 thickCol.push(g, g * 0.72, g * 0.22, g, g * 0.72, g * 0.22);
             }
@@ -423,7 +769,10 @@ export class NodeGraph {
         pos.needsUpdate = true;
         alpha.needsUpdate = true;
         warm.needsUpdate = true;
-        this.lineGeom.setDrawRange(0, w * 2);
+        this.lineGeom.setDrawRange(0, this.soloJolts ? 0 : w * 2);
+        this.points.visible = !this.soloJolts;
+
+        this.emitJoltSegments(thickPts, thickCol);
 
         // LineSegmentsGeometry has no draw-range equivalent, so it is rebuilt each frame from
         // however many edges are currently warm. That count is small (a scattered handful), so
