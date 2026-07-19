@@ -31,6 +31,7 @@ import { hookState, setHook } from "./claude/install-hook.js";
 import { readSessions } from "./claude/sessions.js";
 import { ClaudeDriver } from "./claude/driver.js";
 import { VoiceInput } from "./voice/listen.js";
+import { allPhrases, phrase } from "./voice/phrases.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -234,10 +235,15 @@ async function listenUp(): Promise<void> {
     const text = await voice.stop();
     if (!text) {
         console.log("voice: nothing transcribed");
+        enqueueSpeech(phrase("empty"));
         broadcast({ type: "state", state: "idle" });
         return;
     }
     console.log(`heard: ${text}`);
+    // Answered locally and immediately. A round trip to the agent is seconds, and the gap between
+    // releasing the key and hearing anything is where the interface feels dead. This is queued
+    // before the agent is even consulted, so it plays while Claude is still thinking.
+    enqueueSpeech(phrase("ack"));
     driver.ask(text);
 }
 
@@ -250,6 +256,28 @@ const driver = new ClaudeDriver({
         observer.excludeSession(sessionId);
     },
 });
+
+/**
+ * Renders every canned line into the cache at startup.
+ *
+ * Their whole purpose is to be instant; a cold render is 300-800ms of exactly the silence they
+ * exist to cover. Sequential rather than parallel — a dozen concurrent ffmpeg chains would fight
+ * over the CPU with whatever the user is actually doing.
+ */
+async function warmPhrases(): Promise<void> {
+    const chain = config.chain ?? "measured";
+    // og-warmind translates before speaking, so warming it would fire a dozen CLI round trips.
+    if (chain === "og-warmind") return;
+    const started = Date.now();
+    for (const line of allPhrases()) {
+        try {
+            await synthesize({ text: line, chain, cacheDir: CACHE_DIR });
+        } catch {
+            return; // voice pipeline unavailable; not worth reporting on every line
+        }
+    }
+    console.log(`warmed ${allPhrases().length} canned lines in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+}
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
@@ -493,6 +521,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
     // Warm the model in the background so the first push-to-talk is not the one that waits a
     // minute for a cold load.
     void voice.ensureServer();
+    void warmPhrases();
 
     // Started by the overlay: exit when its stdin pipe closes.
     //
