@@ -85,7 +85,12 @@ M5 observe sessions — **done**.
 M6 drive Claude · M7 persona · M8 standalone app and release — pending.
 
 The overlay is a **menu-bar app** — no Dock icon. Its tray glyph carries the menu:
-Show Orb · Interactive · Move Overlay · Preferences… · Quit.
+Show Orb · Interactive · Move Overlay · Preferences… · Quit. Beside the glyph it names the Claude
+session currently being narrated (`merge-mogul`, or `merge-mogul +2` when several are live), since
+with a global hook every session on the machine reports in.
+
+Turn narration on from **Preferences → Narrate Claude sessions** — no terminal needed. It edits
+`~/.claude/settings.json`, backs it up first, and leaves any other hooks alone.
 
 **Cmd+Shift+R** toggles between *ambient* (visible, click-through) and *interactive* (focused,
 controls shown). Preferences holds the orb tuning, subtitles, default voice mode, opaque-vs-

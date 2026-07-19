@@ -85,6 +85,8 @@ export class SessionWatcher {
     private primed = false;
 
     onChange: ((change: SessionChange) => void) | null = null;
+    /** Live session count each poll — reported even when no status changed. */
+    onCount: ((n: number) => void) | null = null;
 
     constructor(
         private readonly dir = SESSIONS_DIR,
@@ -106,6 +108,7 @@ export class SessionWatcher {
     /** One poll pass. Exposed so tests can drive it rather than wait on a timer. */
     async tick(): Promise<void> {
         const live = await readSessions(this.dir);
+        this.onCount?.(live.length);
         const seen = new Set<string>();
 
         for (const entry of live) {

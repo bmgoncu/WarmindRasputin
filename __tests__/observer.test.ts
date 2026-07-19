@@ -4,12 +4,14 @@ function makeObserver() {
     const said: string[] = [];
     const pulses: number[] = [];
     const states: string[] = [];
+    const focus: { project?: string; sessions: number }[] = [];
     const obs = new SessionObserver({
         say: (t) => said.push(t),
         pulse: (s) => pulses.push(s),
         state: (s) => states.push(s),
+        focus: (f) => focus.push(f),
     });
-    return { obs, said, pulses, states };
+    return { obs, said, pulses, states, focus };
 }
 
 /** Reaches the private transcript handler the tailer would normally drive. */
@@ -136,5 +138,38 @@ describe("task completion", () => {
         const { obs, said } = makeObserver();
         fire(obs, change("idle", "idle"));
         expect(said).toEqual([]);
+    });
+});
+
+describe("focus", () => {
+    it("names the project from the cwd on a hook event", () => {
+        const { obs, focus } = makeObserver();
+        obs.handleHook({ session_id: "s1", cwd: "/Users/x/Depo/merge-mogul" });
+        expect(focus).toHaveLength(1);
+        expect(focus[0].project).toBe("merge-mogul");
+    });
+
+    it("does not re-announce the same session", () => {
+        // Every hook event carries a session_id; emitting on each would rewrite the tray label
+        // dozens of times a minute for no change.
+        const { obs, focus } = makeObserver();
+        obs.handleHook({ session_id: "s1", cwd: "/p/one" });
+        obs.handleHook({ session_id: "s1", cwd: "/p/one", hook_event_name: "PreToolUse" });
+        obs.handleHook({ session_id: "s1", cwd: "/p/one", hook_event_name: "Stop" });
+        expect(focus).toHaveLength(1);
+    });
+
+    it("follows the most recently active session when several are running", () => {
+        const { obs, focus } = makeObserver();
+        obs.handleHook({ session_id: "s1", cwd: "/p/one" });
+        obs.handleHook({ session_id: "s2", cwd: "/p/two" });
+        obs.handleHook({ session_id: "s1", cwd: "/p/one" });
+        expect(focus.map((f) => f.project)).toEqual(["one", "two", "one"]);
+    });
+
+    it("copes with a hook that carries no cwd", () => {
+        const { obs, focus } = makeObserver();
+        obs.handleHook({ session_id: "s1" });
+        expect(focus[0].project).toBeUndefined();
     });
 });

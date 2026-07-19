@@ -29,6 +29,13 @@ export interface HookPayload {
     message?: string;
 }
 
+export interface FocusInfo {
+    project?: string;
+    cwd?: string;
+    sessionId?: string;
+    sessions: number;
+}
+
 export interface ObserverEvents {
     /** Speak this. Already summarised and stripped of markdown. */
     say: (text: string) => void;
@@ -36,6 +43,8 @@ export interface ObserverEvents {
     pulse: (strength: number) => void;
     /** Server-driven orb state. Never "speaking"; the renderer owns that. */
     state: (state: "idle" | "listening" | "thinking" | "alert") => void;
+    /** The session currently being narrated changed. */
+    focus: (info: FocusInfo) => void;
 }
 
 /**
@@ -56,10 +65,16 @@ export class SessionObserver {
     private readonly cwdBySession = new Map<string, string>();
     /** Guards against speaking the same block twice when a line is re-read. */
     private readonly spoken = new Set<string>();
+    /** The session we are attached to — the most recent one to show activity. */
+    private focused: { sessionId: string; cwd?: string } | null = null;
+    private liveCount = 0;
 
     constructor(private readonly events: ObserverEvents) {
         this.tailer.onLines = (ev) => this.onTranscript(ev);
         this.sessions.onChange = (change) => this.onSessionChange(change);
+        this.sessions.onCount = (n) => {
+            this.liveCount = n;
+        };
     }
 
     start(): void {
@@ -84,6 +99,9 @@ export class SessionObserver {
      */
     handleHook(payload: HookPayload): void {
         if (payload.session_id && payload.cwd) this.cwdBySession.set(payload.session_id, payload.cwd);
+        // Most recent activity wins. With a global hook every session on the machine reports, and
+        // "the one that just did something" is the only sensible reading of which is in focus.
+        if (payload.session_id) this.setFocus(payload.session_id, payload.cwd);
 
         // Always start following, whatever the event was. The path only ever arrives this way.
         if (payload.transcript_path) void this.tailer.follow(payload.transcript_path);
@@ -128,7 +146,21 @@ export class SessionObserver {
         }
     }
 
+    /** Announces the attached session, but only when it actually changes. */
+    private setFocus(sessionId: string, cwd?: string): void {
+        const resolved = cwd ?? this.cwdBySession.get(sessionId);
+        if (this.focused?.sessionId === sessionId && this.focused.cwd === resolved) return;
+        this.focused = { sessionId, cwd: resolved };
+        this.events.focus({
+            sessionId,
+            cwd: resolved,
+            project: resolved ? resolved.split("/").filter(Boolean).pop() : undefined,
+            sessions: this.liveCount,
+        });
+    }
+
     private onSessionChange(change: SessionChange): void {
+        this.setFocus(change.session.sessionId, change.session.cwd);
         if (change.to === "busy") {
             this.events.state("thinking");
             return;

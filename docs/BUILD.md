@@ -294,7 +294,23 @@ the renderer, which loads unchanged from Chrome.
   also works in Chrome, survives a reload of either window, and gives one place to persist from
   (`cache/config.json`). Window-to-window Tauri events would satisfy none of those.
 
-## 7. Operational notes
+## 7. Editing the user's Claude settings
+
+`~/.claude/settings.json` governs every Claude session on the machine, so the hook installer is
+held to a higher bar than the rest of the project:
+
+- The CLI prints a diff and writes nothing without `--apply`. The Preferences toggle treats the
+  click as the confirmation, and calls the **same** `setHook` — the button is not a second, laxer
+  implementation of the same edit.
+- A timestamped backup is written before every change.
+- Adding is idempotent: our entry is replaced rather than appended, or re-running would accumulate
+  duplicates that each fire a request.
+- Removing touches only our entry. Verified by round-trip — add then remove restores the original
+  file byte for byte, with other hooks and unrelated settings intact.
+- Status is all-or-nothing: a partial install reads as "not installed", so pressing Install repairs
+  it instead of reporting success while half the events are missing.
+
+## 8. Operational notes
 
 - **`npm run daemon` runs under `tsx watch`.** Plain `tsx` has no reload, and a stale daemon
   answers every request normally while serving old code — a fix then appears not to work.

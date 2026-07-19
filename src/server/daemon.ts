@@ -27,6 +27,7 @@ import { extractTimeline, toWire } from "./audio/timeline.js";
 import { getChain } from "./voice/chains.js";
 import { translate } from "./voice/translate.js";
 import { SessionObserver, type HookPayload } from "./claude/observer.js";
+import { hookState, setHook } from "./claude/install-hook.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -185,7 +186,19 @@ const observer = new SessionObserver({
     },
     pulse: (strength) => broadcast({ type: "pulse", strength }),
     state: (state) => broadcast({ type: "state", state }),
+    focus: (info) => {
+        lastFocus = { type: "focus", ...info };
+        broadcast(lastFocus);
+    },
 });
+
+/**
+ * Last focus broadcast, replayed to windows that connect later.
+ *
+ * The overlay may reload or the app may start after a session is already being narrated; without
+ * this the tray would sit blank until the next session event, which can be minutes.
+ */
+let lastFocus: ServerMsg & { type: "focus" } = { type: "focus", sessions: 0 };
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
@@ -238,6 +251,31 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
             console.warn("bad hook payload:", String(err));
         }
         return;
+    }
+
+    // Narration on/off, driven from Preferences so the terminal is not required.
+    if (url.pathname === "/hook") {
+        if (req.method === "GET") {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify(await hookState()));
+            return;
+        }
+        if (req.method === "POST") {
+            try {
+                const body = JSON.parse((await readBody(req)) || "{}") as { enabled?: boolean };
+                const result = await setHook(body.enabled === true);
+                const state = await hookState();
+                if (result.changed) {
+                    console.log(`hook ${state.installed ? "installed" : "removed"}${result.backup ? ` (backup: ${result.backup})` : ""}`);
+                }
+                res.writeHead(200, { "content-type": "application/json" });
+                res.end(JSON.stringify({ ...state, changed: result.changed, backup: result.backup }));
+            } catch (err) {
+                res.writeHead(500, { "content-type": "application/json" });
+                res.end(JSON.stringify({ error: String(err) }));
+            }
+            return;
+        }
     }
 
     if (url.pathname === "/observed" && req.method === "GET") {
@@ -314,6 +352,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                 }
                 case "get-config":
                     ws.send(JSON.stringify({ type: "config", ...config } satisfies ServerMsg));
+                    ws.send(JSON.stringify(lastFocus));
                     break;
             }
         });

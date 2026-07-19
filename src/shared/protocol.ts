@@ -95,7 +95,26 @@ export interface ConfigMsg extends OrbConfig {
     type: "config";
 }
 
-export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg;
+/**
+ * Which Claude session Rasputin is currently attached to.
+ *
+ * Shown beside the tray icon, because with a global hook every session on the machine reports in
+ * and there is otherwise no way to tell whose output is being narrated — or, once voice input
+ * lands, which session a dictation would reach.
+ */
+export interface FocusMsg {
+    type: "focus";
+    /** Last path component of the cwd — what a person calls the project. */
+    project?: string;
+    cwd?: string;
+    sessionId?: string;
+    /** How many live sessions are reporting, so several can be distinguished from one. */
+    sessions: number;
+    /** Where dictation would go. Undefined until voice input exists (M6). */
+    dictateTo?: string;
+}
+
+export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg | FocusMsg;
 
 // --- renderer → server -------------------------------------------------------------------
 
@@ -160,7 +179,9 @@ export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | SetConfigMsg | GetConf
 export function isServerMsg(v: unknown): v is ServerMsg {
     if (typeof v !== "object" || v === null) return false;
     const t = (v as { type?: unknown }).type;
-    return t === "speak" || t === "state" || t === "stop" || t === "pulse" || t === "config";
+    return (
+        t === "speak" || t === "state" || t === "stop" || t === "pulse" || t === "config" || t === "focus"
+    );
 }
 
 export function isClientMsg(v: unknown): v is ClientMsg {

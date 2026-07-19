@@ -183,6 +183,63 @@ async function refreshBounds(): Promise<void> {
     }
 }
 
+// --- session narration ---------------------------------------------------------------------
+// Over HTTP rather than the socket: this is a request with an answer, and the answer (what
+// changed, where the backup went) belongs to the caller rather than to every connected window.
+const narrate = $<HTMLInputElement>("narrate");
+const narrateHint = $<HTMLElement>("narratehint");
+
+interface HookState {
+    installed: boolean;
+    settingsPath: string;
+    endpoint: string;
+    events: string[];
+    changed?: boolean;
+    backup?: string;
+}
+
+function showHook(state: HookState): void {
+    narrate.checked = state.installed;
+    narrate.disabled = false;
+    narrateHint.textContent = state.installed
+        ? `On. Every Claude session reports to ${state.endpoint}. Edits ${state.settingsPath}.`
+        : `Off. Turning this on adds an async hook to ${state.settingsPath} so sessions report to Rasputin. Your settings are backed up first, and other hooks are left alone.`;
+}
+
+async function refreshHook(): Promise<void> {
+    try {
+        showHook((await (await fetch(`${DAEMON_ORIGIN}/hook`)).json()) as HookState);
+    } catch {
+        narrate.disabled = true;
+        narrateHint.textContent = "daemon offline — cannot read hook status";
+    }
+}
+
+narrate.addEventListener("change", async () => {
+    const wanted = narrate.checked;
+    narrate.disabled = true;
+    narrateHint.textContent = wanted ? "installing…" : "removing…";
+    try {
+        const res = await fetch(`${DAEMON_ORIGIN}/hook`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: wanted }),
+        });
+        const state = (await res.json()) as HookState;
+        showHook(state);
+        if (state.changed && state.backup) {
+            narrateHint.textContent += ` Backup: ${state.backup.split("/").pop()}`;
+        }
+        // Only NEW sessions read settings at startup, so saying nothing here would look like a
+        // no-op to anyone with a session already open.
+        if (state.changed) narrateHint.textContent += " Takes effect in new Claude sessions.";
+    } catch (err) {
+        narrateHint.textContent = `failed: ${String(err)}`;
+        void refreshHook();
+    }
+});
+void refreshHook();
+
 const autostart = $<HTMLInputElement>("autostart");
 async function refreshAutostart(): Promise<void> {
     const bridge = tauri();

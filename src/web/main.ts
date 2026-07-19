@@ -184,6 +184,20 @@ link.onClose = () => {
     sendBtn.disabled = true;
 };
 /**
+ * Names the narrated session beside the tray glyph.
+ *
+ * Overlay only — in Chrome there is no tray, and invoking would throw. A second session is shown
+ * as a "+n" suffix rather than a list, because the menu bar has room for a word, not an inventory.
+ */
+function setTrayLabel(project: string | undefined, sessions: number): void {
+    if (!inOverlay()) return;
+    const extra = sessions > 1 ? ` +${sessions - 1}` : "";
+    const text = project ? `${project}${extra}` : "";
+    const bridge = (window as unknown as { __TAURI__?: { core?: { invoke: (c: string, a?: unknown) => Promise<unknown> } } }).__TAURI__;
+    void bridge?.core?.invoke("set_tray_title", { text }).catch(() => undefined);
+}
+
+/**
  * Opaque black behind the orb instead of desktop show-through.
  *
  * The renderer clear colour has to change too, not just the CSS: the WebGL canvas is drawn with
@@ -241,6 +255,9 @@ link.onMessage = (msg) => {
             break;
         case "state":
             // M3 renders speech only; the rest of the state machine lands with the overlay.
+            break;
+        case "focus":
+            setTrayLabel(msg.project, msg.sessions);
             break;
         case "config":
             if (msg.idleFloor !== undefined) orb.idleFloor = msg.idleFloor;

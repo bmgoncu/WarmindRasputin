@@ -90,6 +90,54 @@ async function readSettings(): Promise<Settings> {
     }
 }
 
+export interface HookState {
+    installed: boolean;
+    settingsPath: string;
+    endpoint: string;
+    events: readonly string[];
+}
+
+/**
+ * Whether every subscribed event carries our hook.
+ *
+ * All-or-nothing on purpose: a partial install (one event added, another lost to a hand edit)
+ * should read as "not installed" so pressing Install repairs it, rather than as "installed" while
+ * silently missing half the events.
+ */
+export async function hookState(): Promise<HookState> {
+    const settings = await readSettings();
+    const hooks = (settings.hooks ?? {}) as HookMap;
+    const installed = EVENTS.every((event) =>
+        (hooks[event] ?? []).some((m) => (m.hooks ?? []).some(isOurs)),
+    );
+    return { installed, settingsPath: SETTINGS_PATH, endpoint: ENDPOINT, events: EVENTS };
+}
+
+/**
+ * Installs or removes the hook, returning what changed.
+ *
+ * Shared by the CLI and the Preferences button, so both take the same backup and the same
+ * idempotent path — the button must not be a second, laxer implementation of the same edit.
+ */
+export async function setHook(enabled: boolean): Promise<{ changed: boolean; backup?: string }> {
+    const current = await readSettings();
+    const before = JSON.stringify(current, null, 2);
+    const next = enabled ? addHook(current) : removeHook(current);
+    const after = JSON.stringify(next, null, 2);
+    if (before === after) return { changed: false };
+
+    await mkdir(dirname(SETTINGS_PATH), { recursive: true });
+    let backup: string | undefined;
+    if (before !== "{}") {
+        backup = `${SETTINGS_PATH}.rasputin-backup-${Date.now()}`;
+        await copyFile(SETTINGS_PATH, backup).catch(() => {
+            backup = undefined;
+        });
+    }
+    await writeFile(SETTINGS_PATH, `${after}\n`, "utf8");
+    return { changed: true, backup };
+}
+
 /** Minimal line diff — enough to review a settings change, and no dependency. */
 function diff(before: string, after: string): string {
     const a = before.split("\n");
@@ -129,15 +177,8 @@ async function main(): Promise<void> {
         return;
     }
 
-    await mkdir(dirname(SETTINGS_PATH), { recursive: true });
-    if (before !== "{}") {
-        // The user's global config governs every session on the machine; never overwrite it
-        // without leaving a way back.
-        const backup = `${SETTINGS_PATH}.rasputin-backup-${Date.now()}`;
-        await copyFile(SETTINGS_PATH, backup).catch(() => undefined);
-        console.log(`\nbacked up to ${backup}`);
-    }
-    await writeFile(SETTINGS_PATH, `${after}\n`, "utf8");
+    const result = await setHook(!remove);
+    if (result.backup) console.log(`\nbacked up to ${result.backup}`);
     console.log(remove ? "Removed." : "Installed. New Claude sessions will report to the daemon.");
 }
 

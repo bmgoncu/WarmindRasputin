@@ -181,6 +181,18 @@ fn center_overlay(app: tauri::AppHandle) -> Result<(), String> {
     app.get_webview_window("main").ok_or("main window missing")?.center().map_err(|e| e.to_string())
 }
 
+/// Text shown beside the tray glyph.
+///
+/// With a global hook every Claude session on the machine reports in, so without a label there is
+/// no way to tell whose output is being narrated. An empty string clears it.
+#[tauri::command]
+fn set_tray_title(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    let tray = app.tray_by_id("rasputin").ok_or("tray not built yet")?;
+    let title = text.trim();
+    tray.set_title(if title.is_empty() { None } else { Some(title) })
+        .map_err(|e| e.to_string())
+}
+
 /// Launch at login.
 ///
 /// Registers the app itself, not the daemon — the daemon is a separate Node process with its own
@@ -238,7 +250,8 @@ pub fn run() {
             center_overlay,
             open_preferences,
             set_autostart,
-            get_autostart
+            get_autostart,
+            set_tray_title
         ])
         .setup(|app| {
             // Menu-bar app: no Dock icon, no app-switcher entry. Accessory is what makes the tray
