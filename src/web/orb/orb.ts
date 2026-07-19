@@ -26,6 +26,11 @@ import { NodeGraph, type Pulse } from "./graph.js";
 const OUTER_RADIUS = 1.78;
 const WORLD_RADIUS = 1.9;
 
+// Jolt density base. The harness slider scales the interval down and the cap up together — one
+// without the other either starves the graph or lets a burst spawn and then go quiet.
+const JOLT_INTERVAL = 1.05;
+const JOLT_MAX = 5;
+
 const SHAKE_INNER = 0.009;
 const SHAKE_OUTER = 0.013;
 
@@ -211,8 +216,8 @@ export class Orb {
             // Outer shell takes the visible push; the inner volume moves less.
             pushScale: 0.13,
             // Electric jolts walk the outer shell only.
-            joltInterval: 1.6,
-            maxJolts: 3,
+            joltInterval: JOLT_INTERVAL,
+            maxJolts: JOLT_MAX,
             speechJitter: SHAKE_OUTER,
             colour: 0xff5f26,
             seed: 90210,
@@ -281,6 +286,15 @@ export class Orb {
     }
 
     /** Live state for the dev harness. */
+    /** Scales jolt density, 0-2x of the tuned base. Dev harness slider. */
+    setJoltDensity(k: number): void {
+        if (k <= 0) {
+            this.outer.setJolts(0, 0);
+            return;
+        }
+        this.outer.setJolts(JOLT_INTERVAL / k, Math.max(1, Math.round(JOLT_MAX * k)));
+    }
+
     /** How far the outer lattice reaches past the r=1 shell. Dev harness slider. */
     setOuterRadius(r: number): void {
         this.outer.setRadius(r);

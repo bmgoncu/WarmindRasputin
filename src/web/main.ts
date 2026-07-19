@@ -63,6 +63,8 @@ const shake = document.getElementById("shake") as HTMLInputElement;
 const shakeOut = document.getElementById("shakeout") as HTMLElement;
 const reach = document.getElementById("reach") as HTMLInputElement;
 const reachOut = document.getElementById("reachout") as HTMLElement;
+const jolts = document.getElementById("jolts") as HTMLInputElement;
+const joltsOut = document.getElementById("joltsout") as HTMLElement;
 const readout = document.getElementById("readout") as HTMLElement;
 let simulate = false;
 
@@ -70,6 +72,12 @@ shake.addEventListener("input", () => {
     const k = Number(shake.value) / 100;
     orb.setShakeScale(k);
     shakeOut.textContent = `${k.toFixed(2)}x`;
+});
+
+jolts.addEventListener("input", () => {
+    const k = Number(jolts.value) / 100;
+    orb.setJoltDensity(k);
+    joltsOut.textContent = `${k.toFixed(2)}x`;
 });
 
 // How far the outer lattice reaches past the shell. Capped at 2.2: the camera sits at z=5.6 with

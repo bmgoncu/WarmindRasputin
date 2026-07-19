@@ -589,6 +589,18 @@ export class NodeGraph {
         this.opts.radius = r;
     }
 
+    /**
+     * Live tuning — jolt spawn interval and concurrency. An interval of 0 disables them.
+     *
+     * Trims any jolts already in flight past the new cap, so lowering the slider takes effect
+     * immediately rather than after the excess ones happen to expire.
+     */
+    setJolts(interval: number, max: number): void {
+        this.opts.joltInterval = interval;
+        this.opts.maxJolts = max;
+        if (this.jolts.length > max) this.jolts.length = max;
+    }
+
     /** Shared across graphs — see GraphOptions.worldRadius. */
     setWorldRadius(v: number): void {
         this.opts.worldRadius = v;
