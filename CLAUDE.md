@@ -207,6 +207,10 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **Homebrew's `rustup` keeps its shims in its own opt dir, not `~/.cargo/bin`.** So
+  `brew install rustup && rustup default stable` succeeds while `cargo` stays off PATH, and
+  `tauri dev` fails with a bare `cargo metadata … No such file or directory`. The npm scripts go
+  through `scripts/with-rust.sh`, which finds the toolchain itself — no shell profile edit needed.
 - **`cmd | grep -q` under `set -o pipefail` reports failure on a MATCH.** grep exits at the first
   hit, the producer takes SIGPIPE, and pipefail surfaces its 141. In `setup.sh` this presented as
   seven ffmpeg filters missing from a build that had them — and only the ones early in the

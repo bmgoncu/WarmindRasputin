@@ -244,7 +244,9 @@ the renderer, which loads unchanged from Chrome.
 - **`macOSPrivateApi: true` is required** in `tauri.conf.json` for a transparent window on macOS.
 - **Homebrew's `rustup` puts its shims in its own opt dir, not `~/.cargo/bin`.** So
   `brew install rustup && rustup default stable` succeeds and still leaves `rustc` and `cargo` off
-  PATH. Add `export PATH="$(brew --prefix rustup)/bin:$PATH"`. `setup.sh` detects this exact state.
+  PATH — `tauri dev` then fails with a bare `cargo metadata … No such file or directory`. The
+  `overlay` scripts run through `scripts/with-rust.sh`, which locates the toolchain itself, so no
+  shell profile edit is required. `setup.sh --check` reports the state either way.
 - **`frontendDist` is `../lib/web`, not `../dist`** — `vite.config.ts` builds to `lib/web`. The
   daemon's static route had the same mistake and would have 404'd every asset in production,
   invisible in development where Vite serves the page.

@@ -22,8 +22,8 @@
     "extract-ambience": "tsx src/server/audio/extract-ambience.ts",
     "orb": "vite",
     "orb:build": "vite build",
-    "overlay": "tauri dev",
-    "overlay:build": "tauri build",
+    "overlay": "./scripts/with-rust.sh tauri dev",
+    "overlay:build": "./scripts/with-rust.sh tauri build",
     "daemon": "tsx watch src/server/daemon.ts"
   },
   "devDependencies": {
