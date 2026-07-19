@@ -268,6 +268,11 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                     broadcast({ type: "config", ...config });
                     break;
                 }
+                case "log": {
+                    const tag = `[${parsed.level}]`;
+                    console.log(`renderer ${tag} ${parsed.message}`);
+                    break;
+                }
                 case "get-config":
                     ws.send(JSON.stringify({ type: "config", ...config } satisfies ServerMsg));
                     break;

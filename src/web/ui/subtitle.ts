@@ -129,68 +129,63 @@ export class Subtitle {
         this.line = document.createElement("span");
         this.root.appendChild(this.line);
         parent.appendChild(this.root);
-        Subtitle.injectStyle();
+        this.style();
     }
 
-    private static injected = false;
-
     /**
-     * Styles are injected rather than living in index.html so the component is self-contained —
-     * the overlay gets subtitles by constructing this, with no HTML to keep in sync.
+     * Styles are applied through CSSOM rather than an injected `<style>` element.
+     *
+     * A `<style>` block is governed by the CSP's `style-src`, and Tauri rewrites the app CSP with
+     * nonces — the presence of a nonce makes browsers ignore `'unsafe-inline'`, so the block was
+     * silently dropped in the overlay while working fine in Chrome. An unstyled subtitle is a
+     * static block after a 100vh canvas, i.e. off-screen: invisible, with nothing logged.
+     *
+     * Direct CSSOM property assignment is NOT subject to `style-src`, so this cannot be blocked.
      */
-    private static injectStyle(): void {
-        if (Subtitle.injected) return;
-        Subtitle.injected = true;
-        const css = `
-.rasputin-subtitle {
-    position: fixed;
-    left: 50%;
-    bottom: 12%;
-    transform: translateX(-50%);
-    /* fit-content, not a fixed width: the band is sized by its longest line, so a short subtitle
-       gets a short band. A full-width band behind three words is the obvious tell. */
-    width: fit-content;
-    max-width: min(60vw, 780px);
-    padding: 0.34em 2.6em;
-    text-align: center;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 180ms ease-out;
-    z-index: 10;
-    /* ONE band spanning both lines, fading to nothing at each end. Putting the gradient on the
-       text instead (with box-decoration-break) draws a separate box per wrapped line, which the
-       reference never shows — there the two lines sit inside a single continuous band. */
-    background-image: linear-gradient(
-        to right,
-        rgba(6, 6, 8, 0) 0%,
-        rgba(6, 6, 8, 0.55) 10%,
-        rgba(6, 6, 8, 0.76) 42%,
-        rgba(6, 6, 8, 0.72) 62%,
-        rgba(6, 6, 8, 0.5) 90%,
-        rgba(6, 6, 8, 0) 100%
-    );
-}
-.rasputin-subtitle.on { opacity: 1; }
-.rasputin-subtitle span {
-    /* Helvetica Neue ahead of Helvetica deliberately. Measured on this machine, plain Helvetica
-       renders only THREE distinct faces across weights 300-700: 300/400/500 are all Regular and
-       600/700 are both Bold. There is no middle, so "slightly less bold" is unreachable with it —
-       asking for 600 silently gives full Bold. Helvetica Neue has four, including a real Medium
-       at 500, which is the weight this sits at. */
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: clamp(15px, 1.62vw, 25px);
-    /* Medium. 600 here renders as full Bold in both families — see the font-family note. Drop to
-       400 for Regular if this still reads heavy; there is nothing between 500 and Bold. */
-    font-weight: 500;
-    line-height: 1.36;
-    letter-spacing: 0.004em;
-    color: #e8e8e6;
-    /* Keeps text legible where the band has faded to nothing at the ends. */
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 0 2px rgba(0, 0, 0, 0.75);
-}`;
-        const el = document.createElement("style");
-        el.textContent = css;
-        document.head.appendChild(el);
+    private style(): void {
+        Object.assign(this.root.style, {
+            position: "fixed",
+            left: "50%",
+            bottom: "12%",
+            transform: "translateX(-50%)",
+            // Sized by its longest line, so a short subtitle gets a short band. A full-width band
+            // behind three words is the obvious tell.
+            width: "fit-content",
+            maxWidth: "min(60vw, 780px)",
+            padding: "0.34em 2.6em",
+            textAlign: "center",
+            pointerEvents: "none",
+            opacity: "0",
+            transition: "opacity 180ms ease-out",
+            zIndex: "10",
+            // ONE band spanning both lines, fading to nothing at each end. Putting the gradient on
+            // the text instead (with box-decoration-break) draws a separate box per wrapped line,
+            // which the reference never shows.
+            backgroundImage:
+                "linear-gradient(to right," +
+                " rgba(6,6,8,0) 0%, rgba(6,6,8,0.55) 10%, rgba(6,6,8,0.76) 42%," +
+                " rgba(6,6,8,0.72) 62%, rgba(6,6,8,0.5) 90%, rgba(6,6,8,0) 100%)",
+        } satisfies Partial<CSSStyleDeclaration>);
+
+        Object.assign(this.line.style, {
+            // Helvetica Neue ahead of Helvetica deliberately. Measured, plain Helvetica renders
+            // only THREE distinct faces across weights 300-700 — 300/400/500 all Regular and
+            // 600/700 both Bold — so "slightly less bold" is unreachable with it. Neue has a real
+            // Medium at 500, which is the weight this sits at.
+            fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+            fontSize: "clamp(15px, 1.62vw, 25px)",
+            fontWeight: "500",
+            lineHeight: "1.36",
+            letterSpacing: "0.004em",
+            color: "#e8e8e6",
+            // Keeps text legible where the band has faded to nothing at the ends.
+            textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 2px rgba(0,0,0,0.75)",
+        } satisfies Partial<CSSStyleDeclaration>);
+    }
+
+    /** True when the styling actually took effect — surfaced in diagnostics. */
+    get styled(): boolean {
+        return getComputedStyle(this.root).position === "fixed";
     }
 
     setEnabled(on: boolean): void {
@@ -205,6 +200,12 @@ export class Subtitle {
     /** Current visible text, or "" — used by tests and the debug hook. */
     get text(): string {
         return this.root.classList.contains("on") ? this.line.textContent ?? "" : "";
+    }
+
+    /** Visible rect, for diagnostics — an off-screen subtitle is otherwise indistinguishable. */
+    get rect(): { top: number; width: number; height: number } {
+        const r = this.root.getBoundingClientRect();
+        return { top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
     }
 
     /** Loads an utterance as timed cues. Nothing displays until `update` is called. */
@@ -235,12 +236,14 @@ export class Subtitle {
 
     show(text: string): void {
         if (!this.enabled || !text.trim()) return;
+        this.root.style.opacity = "1";
         if (this.hideTimer !== null) {
             clearTimeout(this.hideTimer);
             this.hideTimer = null;
         }
         this.line.textContent = text.trim();
         this.root.classList.add("on");
+        this.root.style.opacity = "1";
     }
 
     /** Hides after a hold, so the last word is not cut off as the audio tail decays. */
@@ -248,6 +251,7 @@ export class Subtitle {
         if (this.hideTimer !== null) clearTimeout(this.hideTimer);
         this.hideTimer = window.setTimeout(() => {
             this.root.classList.remove("on");
+            this.root.style.opacity = "0";
             this.hideTimer = null;
         }, holdSec * 1000);
     }
@@ -260,5 +264,6 @@ export class Subtitle {
             this.hideTimer = null;
         }
         this.root.classList.remove("on");
+        this.root.style.opacity = "0";
     }
 }

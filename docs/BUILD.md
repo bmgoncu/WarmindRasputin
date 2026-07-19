@@ -268,6 +268,11 @@ the renderer, which loads unchanged from Chrome.
   CSP-blocked `new WebSocket()` throws synchronously — aborting module execution before the render
   loop starts. Use `127.0.0.1` explicitly when `inOverlay()`.
 - **`connect-src` must include `ipc: http://ipc.localhost`** or every Tauri `invoke()` fails.
+- **Overlay UI must be styled through CSSOM, not an injected `<style>` element.** Tauri rewrites the
+  CSP with nonces, and a nonce makes `'unsafe-inline'` inert, so injected style blocks are dropped
+  in the overlay while working in Chrome.
+- **The renderer logs to the daemon** via a `log` client message, since a release-build WKWebView
+  has no devtools to open.
 - **`Image::from_path` needs tauri's `image-png` feature.** Without it the tray can only use the
   compiled-in window icon.
 - **Preferences is a second window with its own vite entry.** `rollupOptions.input` must list

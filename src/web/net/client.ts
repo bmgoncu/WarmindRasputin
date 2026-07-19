@@ -76,6 +76,11 @@ export class DaemonLink {
      * Returning void here silently swallowed every message sent while the daemon was down, and
      * the speak button looked broken rather than disconnected.
      */
+    /** Sends a diagnostic to the daemon log. Silently dropped when disconnected — best effort. */
+    log(level: "info" | "warn" | "error", message: string): void {
+        this.send({ type: "log", level, message });
+    }
+
     send(msg: ClientMsg): boolean {
         if (this.ws?.readyState !== WebSocket.OPEN) return false;
         this.ws.send(JSON.stringify(msg));

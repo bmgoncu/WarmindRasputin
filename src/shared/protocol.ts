@@ -136,7 +136,20 @@ export interface GetConfigMsg {
     type: "get-config";
 }
 
-export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | SetConfigMsg | GetConfigMsg;
+/**
+ * Renderer diagnostics, surfaced in the daemon log.
+ *
+ * The overlay is a WKWebView with no devtools reachable in a release build, so without this a
+ * renderer-side failure is completely invisible — the window simply does nothing and there is
+ * nowhere to look. Two overlay-only bugs were diagnosed from the daemon log alone.
+ */
+export interface LogMsg {
+    type: "log";
+    level: "info" | "warn" | "error";
+    message: string;
+}
+
+export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | SetConfigMsg | GetConfigMsg | LogMsg;
 
 /**
  * Narrows an unknown parsed JSON value to a ServerMsg.
@@ -153,5 +166,7 @@ export function isServerMsg(v: unknown): v is ServerMsg {
 export function isClientMsg(v: unknown): v is ClientMsg {
     if (typeof v !== "object" || v === null) return false;
     const t = (v as { type?: unknown }).type;
-    return t === "hello" || t === "playback" || t === "say" || t === "set-config" || t === "get-config";
+    return (
+        t === "hello" || t === "playback" || t === "say" || t === "set-config" || t === "get-config" || t === "log"
+    );
 }

@@ -223,7 +223,14 @@ link.onMessage = (msg) => {
             // what means anything — same division of labour as the game's own subtitles.
             pendingSubtitle = msg.sourceText ?? msg.text;
             subtitle.setCues(pendingSubtitle);
-            void player.play(msg, DAEMON_ORIGIN).catch((e) => console.error("playback failed:", e));
+            void player.play(msg, DAEMON_ORIGIN).catch((e) => {
+                console.error("playback failed:", e);
+                link.log("error", `playback failed: ${String(e)}`);
+                // The subtitle is the fallback channel, not a decoration on top of working audio —
+                // exactly as in the game, where the speech is unintelligible and the caption
+                // carries the meaning. Silent speech must still be readable.
+                subtitle.update(0);
+            });
             break;
         case "stop":
             player.stop();
@@ -256,12 +263,19 @@ link.onMessage = (msg) => {
 // second behind the message, and a subtitle appearing before any sound reads as broken.
 let pendingSubtitle = "";
 player.onPhase = (id, phase, ctxLatency) => {
-    if (phase === "started") subtitle.update(0);
+    if (phase === "started") {
+        subtitle.update(0);
+        // Reported because an off-screen or unstyled subtitle looks identical to one that was
+        // never asked to show, and the overlay has no devtools to check it in.
+        const r = subtitle.rect;
+        link.log("info", `subtitle styled=${subtitle.styled} enabled=${subtitle.isEnabled} rect=${r.width}x${r.height}@${r.top} vh=${innerHeight}`);
+    }
     else subtitle.hideSoon();
     link.send({ type: "playback", id, phase, ctxLatency });
 };
 // Each speech onset launches a shockwave, so consonants read as impulses rather than only as level.
 player.onOnset = (strength) => orb.pulse(0.45 + strength * 0.55);
+player.onWarning = (message) => link.log("warn", message);
 link.onOpen = ((prev) => () => {
     prev?.();
     // Adopt whatever the daemon already has, so a reloaded overlay is not reset to defaults.
@@ -275,6 +289,11 @@ try {
 } catch (err) {
     console.error("daemon link failed to start:", err);
 }
+
+// The overlay has no reachable devtools in a release build, so uncaught failures would otherwise
+// be entirely invisible — the window just stops doing things.
+addEventListener("error", (e) => link.log("error", `${e.message} @ ${e.filename}:${e.lineno}`));
+addEventListener("unhandledrejection", (e) => link.log("error", `unhandled rejection: ${String(e.reason)}`));
 
 function submit(): void {
     const text = textInput.value.trim();

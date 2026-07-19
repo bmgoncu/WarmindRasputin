@@ -207,6 +207,14 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **Do not style overlay UI with an injected `<style>` element — use CSSOM.** `<style>` blocks are
+  governed by `style-src`, and Tauri rewrites the app CSP with nonces; a nonce makes browsers
+  ignore `'unsafe-inline'`, so the block is dropped silently. An unstyled subtitle is a static
+  block after a 100vh canvas — off-screen, invisible, nothing logged. Direct CSSOM assignment
+  (`el.style.x = …`) is not subject to `style-src`.
+- **The renderer can log to the daemon (`link.log`).** The overlay has no reachable devtools in a
+  release build, so this is the only way to see inside it. Two overlay-only bugs were diagnosed
+  from the daemon log alone.
 - **Never derive the daemon origin from `location` in the overlay.** Tauri serves the page from
   `tauri://localhost`, so `location.hostname` is `tauri.localhost` — the derived
   `ws://tauri.localhost:7331` is unresolvable AND outside the CSP.

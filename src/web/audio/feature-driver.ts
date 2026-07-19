@@ -42,6 +42,8 @@ export class SpeechPlayer {
     onPhase: ((id: string, phase: "started" | "ended", latency: number) => void) | null = null;
     /** Fired as each onset in the timeline is crossed, for one-shot impulses. */
     onOnset: ((strength: number) => void) | null = null;
+    /** Non-fatal problems worth surfacing in the daemon log. */
+    onWarning: ((message: string) => void) | null = null;
 
     /**
      * Browsers refuse to start an AudioContext without a user gesture, and one created too early
@@ -83,7 +85,17 @@ export class SpeechPlayer {
     /** Fetches, decodes and schedules an utterance. Any current one is cut off. */
     async play(msg: SpeakMsg, base: string): Promise<void> {
         const ctx = this.context();
-        if (ctx.state !== "running") await ctx.resume();
+        if (ctx.state !== "running") {
+            // A rejected resume must NOT abort playback. Without a user gesture the context stays
+            // suspended, and letting that throw meant the whole utterance was dropped — including
+            // the subtitle, which does not need audio at all. Schedule anyway: the buffer plays as
+            // soon as the context is unlocked, and the visuals run regardless.
+            try {
+                await ctx.resume();
+            } catch (err) {
+                this.onWarning?.(`audio context suspended (needs a user gesture): ${String(err)}`);
+            }
+        }
 
         const buffer = await this.load(msg.audioUrl, base);
         this.stop();
@@ -108,6 +120,9 @@ export class SpeechPlayer {
             }
         };
         this.onPhase?.(msg.id, "started", ctx.outputLatency ?? 0);
+        if (ctx.state !== "running") {
+            this.onWarning?.(`scheduled while context is "${ctx.state}" — visuals run, audio is silent`);
+        }
     }
 
     stop(): void {
