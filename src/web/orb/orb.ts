@@ -26,11 +26,13 @@ import { NodeGraph, type Pulse } from "./graph.js";
 const OUTER_RADIUS = 1.78;
 const WORLD_RADIUS = 1.9;
 
-// Jolt density. The slider sets the concurrent cap directly and the spawn interval is derived
-// from it: with a mean jolt lifetime of ~3.5s and the spawn timer's own 1.2x mean jitter, an
-// interval of JOLT_FILL/cap settles at roughly 0.85 of the cap — full enough to look dense,
-// short enough that the count still varies instead of sitting pinned at the ceiling.
-const JOLT_FILL = 3.4;
+// Jolt density. The slider sets the concurrent cap; lifetime and spawn interval are derived so
+// that a bigger population arrives as MORE JOLTS rather than as a faster one. Holding N jolts
+// requires a spawn every life/N seconds, so raising the cap against a fixed lifetime just raises
+// the spawn rate — at cap 50 that was 13 spawns/sec against 1/sec at cap 5, which reads as
+// flicker. Above ~10 the interval floors and the lifetime stretches instead.
+const JOLT_LIFE = 3.5;
+const JOLT_MIN_INTERVAL = 0.35;
 const JOLT_MAX = 5;
 
 const SHAKE_INNER = 0.009;
@@ -183,6 +185,7 @@ export class Orb {
             pushScale: 0.05,
             joltInterval: 0,
             maxJolts: 0,
+            joltLife: JOLT_LIFE,
             speechJitter: SHAKE_INNER,
             colour: 0xffb070,
             seed: 4242,
@@ -218,8 +221,9 @@ export class Orb {
             // Outer shell takes the visible push; the inner volume moves less.
             pushScale: 0.13,
             // Electric jolts walk the outer shell only.
-            joltInterval: JOLT_FILL / JOLT_MAX,
+            joltInterval: JOLT_LIFE / JOLT_MAX,
             maxJolts: JOLT_MAX,
+            joltLife: JOLT_LIFE,
             speechJitter: SHAKE_OUTER,
             colour: 0xff5f26,
             seed: 90210,
@@ -285,6 +289,7 @@ export class Orb {
 
         // Field initializers ran before the graphs existed, so push the starting floor now.
         this.idleFloor = this._idleFloor;
+        this.setJoltCount(JOLT_MAX);
     }
 
     /** Live state for the dev harness. */
@@ -297,10 +302,14 @@ export class Orb {
      */
     setJoltCount(n: number): void {
         if (n <= 0) {
-            this.outer.setJolts(0, 0);
+            this.outer.setJolts(0, 0, JOLT_LIFE);
             return;
         }
-        this.outer.setJolts(JOLT_FILL / n, n);
+        // Spawn no faster than JOLT_MIN_INTERVAL; past that, hold the population by making each
+        // jolt last longer instead. A long-lived jolt wanders further, which is the point — the
+        // slider should add currents to follow, not make sparks blink in and out.
+        const life = Math.max(JOLT_LIFE, n * JOLT_MIN_INTERVAL);
+        this.outer.setJolts(life / n, n, life);
     }
 
     /** How far the outer lattice reaches past the r=1 shell. Dev harness slider. */

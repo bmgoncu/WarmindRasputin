@@ -92,6 +92,15 @@ export interface GraphOptions {
     /** Cap on simultaneous jolts. */
     maxJolts: number;
     /**
+     * Mean jolt lifetime in seconds.
+     *
+     * Sustaining N jolts needs a spawn every life/N seconds, so the ONLY way to hold a large
+     * population without a frantic spawn rate is to make each one last longer. Deriving the cap
+     * from a fixed lifetime instead made raising the slider read as speed rather than as count —
+     * at cap 50 it was spawning 13 times a second where cap 5 spawned once.
+     */
+    joltLife: number;
+    /**
      * How far nodes vibrate at full level, as a fraction of radius. 0 disables.
      *
      * Speech energy shakes the lattice — the structure is being driven, not just lit. Kept small:
@@ -521,7 +530,7 @@ export class NodeGraph {
                     t: 0,
                     hops: 0,
                     speed: 7 + Math.random() * 8,
-                    life: 2.2 + Math.random() * 2.6,
+                    life: o.joltLife * (0.72 + Math.random() * 0.56),
                     tail: 0.45 + Math.random() * 0.5,
                     strength: 0.6 + Math.random() * 0.4,
                 });
@@ -590,14 +599,15 @@ export class NodeGraph {
     }
 
     /**
-     * Live tuning — jolt spawn interval and concurrency. An interval of 0 disables them.
+     * Live tuning — jolt spawn interval, concurrency and lifetime. An interval of 0 disables them.
      *
      * Trims any jolts already in flight past the new cap, so lowering the slider takes effect
      * immediately rather than after the excess ones happen to expire.
      */
-    setJolts(interval: number, max: number): void {
+    setJolts(interval: number, max: number, life: number): void {
         this.opts.joltInterval = interval;
         this.opts.maxJolts = max;
+        this.opts.joltLife = life;
         if (this.jolts.length > max) this.jolts.length = max;
     }
 

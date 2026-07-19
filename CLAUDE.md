@@ -195,6 +195,9 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   outputs nothing is pixel-identical to manual idle, so a broken envelope reads as a broken button
   instead. The harness's simulated speech had an 11-second silence for exactly this reason —
   measure a driver's per-second peak over a full minute before trusting it, don't watch it.
+- **A population of lifetime-bound objects reaches steady state after one LIFETIME, not one
+  interval.** Measuring jolt fill 6s after raising the cap to a 17.5s lifetime read 55% and looked
+  like a bug; the same setting measures 83% once given 1.6 lifetimes to settle.
 - **Never pass a named function expression to `page.evaluate` from a `tsx` script.** esbuild
   rewrites it to call its `__name` helper, which does not exist inside the page, so it throws
   `ReferenceError: __name is not defined`. Pass the probe as a source string instead.
