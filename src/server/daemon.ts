@@ -28,6 +28,7 @@ import { getChain } from "./voice/chains.js";
 import { translate } from "./voice/translate.js";
 import { DAEMON_PORT, isClientMsg, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
+const STARTED_AT = new Date().toISOString();
 const CACHE_DIR = resolve("cache");
 const DIST_DIR = resolve("dist");
 
@@ -141,7 +142,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     if (url.pathname === "/health") {
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: true, clients: clients.size }));
+        // startedAt is here because a stale daemon is otherwise invisible: it answers every
+        // request normally while serving whatever code it was launched with. That cost a real
+        // debugging detour — og-warmind subtitles appeared to ignore sourceText when in fact the
+        // process predated the field. `npm run daemon` now runs under `tsx watch`.
+        res.end(JSON.stringify({ ok: true, clients: clients.size, pid: process.pid, startedAt: STARTED_AT }));
         return;
     }
 

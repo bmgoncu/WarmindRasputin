@@ -1,6 +1,6 @@
 {
   "name": "rasputin-claude-ai",
-  "description": "Warmind voice interface for Claude Code — Rasputin persona, audio-reactive orb overlay, observes and drives Claude sessions.",
+  "description": "Warmind voice interface for Claude Code \u2014 Rasputin persona, audio-reactive orb overlay, observes and drives Claude sessions.",
   "private": true,
   "type": "module",
   "engines": {
@@ -21,7 +21,7 @@
     "extract-ambience": "tsx src/server/audio/extract-ambience.ts",
     "orb": "vite",
     "orb:build": "vite build",
-    "daemon": "tsx src/server/daemon.ts"
+    "daemon": "tsx watch src/server/daemon.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

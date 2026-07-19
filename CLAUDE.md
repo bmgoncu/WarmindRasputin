@@ -202,6 +202,10 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **A running daemon does not pick up server-side edits — `npm run daemon` uses `tsx watch`.**
+  Plain `tsx` has no reload, and a stale daemon answers every request normally while serving old
+  code, so a fix appears not to work. `GET /health` reports `startedAt` and `pid`; compare it
+  against your last edit before debugging anything server-side.
 - **Plain Helvetica has no middle weight — asking for 600 gives full Bold.** Measured on this
   machine it renders only three distinct faces across 300-700: 300/400/500 are all Regular and
   600/700 are both Bold. `document.fonts.check` is no help, it returns true for every weight of any
