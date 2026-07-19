@@ -31,7 +31,8 @@ Full design and milestones: `~/.claude/plans/cosmic-bouncing-clarke.md`.
 | Render one line and play it | `npm run say -- "All systems operational"` |
 | A/B chain variants vs. the reference | `npm run audition -- "some line"` |
 | Derive the firequalizer curve from refs | `npm run analyze-ref` |
-| Run the daemon | `npm run daemon` |
+| Run the daemon | `npm run daemon` (:7331) — run `npm run orb` alongside for the page (:7332) |
+| Speak a line through the daemon | `curl -s localhost:7331/speak -d '{"text":"..."}' -H 'content-type: application/json'` |
 | Screenshot the orb | `npx tsx tools/shoot.ts <level> <out.png>` |
 | Isolate one animated system | `ORB_FREEZE=1` (stop drift/spin/pulses) · `ORB_SOLO=1` (jolts alone) |
 | Tests | `npm test` |
@@ -191,6 +192,14 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **The analysis tap and the played wav must stay the same signal.** `synthesize` returns both
+  from one `asplit`; verified by cross-correlating their envelopes — correlation 1.0000 at lag 0.
+  If a chain change ever splits them, every utterance goes silently out of sync and it will look
+  like a clock bug in the renderer.
+- **Audio starts suspended without a user gesture.** An `AudioContext` created on load sits in
+  `suspended` where `currentTime` does not advance, so the orb ignores speech entirely and nothing
+  errors. The harness calls `player.unlock()` on the speak button; Playwright needs
+  `--autoplay-policy=no-user-gesture-required`.
 - **The idle floor hides dead test signals.** With `idleFloor` at 0.22 a stretch where the driver
   outputs nothing is pixel-identical to manual idle, so a broken envelope reads as a broken button
   instead. The harness's simulated speech had an 11-second silence for exactly this reason —

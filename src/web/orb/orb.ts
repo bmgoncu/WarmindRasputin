@@ -329,6 +329,17 @@ export class Orb {
         this.outer.setWorldRadius(w);
     }
 
+    /**
+     * Launches one shockwave immediately.
+     *
+     * Separate from the idle pulse scheduler so speech onsets can fire a wave the instant a
+     * consonant lands, without disturbing the ambient cadence — the two interleave rather than
+     * one resetting the other's timer.
+     */
+    pulse(strength = 0.8): void {
+        this.pulses.push({ age: 0, life: 1.5 + Math.random() * 0.9, strength: Math.min(1, strength) });
+    }
+
     /** Scales both graphs' shake, 0-2x of the tuned base. Dev harness slider. */
     setShakeScale(k: number): void {
         this.inner.setSpeechJitter(SHAKE_INNER * k);

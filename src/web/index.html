@@ -19,10 +19,26 @@
   #ui button { font: inherit; background: #2a1512; color: #e6a883; border: 1px solid #5a2a1e;
                padding: 4px 10px; border-radius: 3px; cursor: pointer; }
   #readout { min-width: 3em; }
+  #say {
+    position: fixed; left: 16px; top: 16px; display: flex; gap: 8px; align-items: center;
+    font: 12px ui-monospace, monospace; color: #c98a6a;
+  }
+  #say input[type=text] { width: 320px; background: #1a0c0a; color: #f0c0a0; border: 1px solid #5a2a1e;
+                          padding: 5px 8px; border-radius: 3px; font: inherit; }
+  #say select, #say button { font: inherit; background: #2a1512; color: #e6a883;
+                             border: 1px solid #5a2a1e; padding: 4px 8px; border-radius: 3px; cursor: pointer; }
+  #link { font-size: 11px; opacity: 0.7; }
+  #link.on { color: #7fe08a; }
 </style>
 </head>
 <body>
   <canvas id="orb"></canvas>
+  <div id="say">
+    <input id="text" type="text" placeholder="say something as Rasputin&hellip;" />
+    <select id="chain"><option>measured</option><option>warmind</option><option>plain</option></select>
+    <button id="send">speak</button>
+    <span id="link">offline</span>
+  </div>
   <div id="ui">
     <input id="level" type="range" min="0" max="100" value="0" />
     <span id="readout">0.00</span>

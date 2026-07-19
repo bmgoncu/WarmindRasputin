@@ -12,6 +12,9 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { Orb } from "./orb/orb.js";
+import { SpeechPlayer } from "./audio/feature-driver.js";
+import { DaemonLink } from "./net/client.js";
+import { DAEMON_PORT } from "../shared/protocol.js";
 
 const canvas = document.getElementById("orb") as HTMLCanvasElement;
 
@@ -139,19 +142,94 @@ function simulatedLevel(t: number): number {
     return Math.min(1, syllable * arc * stress * 1.25);
 }
 
+// --- daemon link ------------------------------------------------------------------------
+// In dev the page is served by Vite on 7332 while the daemon listens on 7331, so the origin has
+// to be named explicitly. When the daemon serves the built page itself (the Tauri path) they are
+// the same origin and location wins.
+const DAEMON_ORIGIN =
+    location.port === String(DAEMON_PORT) ? location.origin : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
+
+const player = new SpeechPlayer();
+const link = new DaemonLink(`${DAEMON_ORIGIN.replace(/^http/, "ws")}/ws`, "chrome-dev");
+const textInput = document.getElementById("text") as HTMLInputElement;
+const chainSel = document.getElementById("chain") as HTMLSelectElement;
+const sendBtn = document.getElementById("send") as HTMLButtonElement;
+const linkTag = document.getElementById("link") as HTMLElement;
+
+link.onOpen = () => {
+    linkTag.textContent = "connected";
+    linkTag.classList.add("on");
+};
+link.onClose = () => {
+    linkTag.textContent = "offline";
+    linkTag.classList.remove("on");
+};
+link.onMessage = (msg) => {
+    switch (msg.type) {
+        case "speak":
+            void player.play(msg, DAEMON_ORIGIN).catch((e) => console.error("playback failed:", e));
+            break;
+        case "stop":
+            player.stop();
+            break;
+        case "pulse":
+            orb.pulse(msg.strength);
+            break;
+        case "state":
+            // M3 renders speech only; the rest of the state machine lands with the overlay.
+            break;
+        case "config":
+            if (msg.idleFloor !== undefined) orb.idleFloor = msg.idleFloor;
+            if (msg.shakeScale !== undefined) orb.setShakeScale(msg.shakeScale);
+            if (msg.outerRadius !== undefined) orb.setOuterRadius(msg.outerRadius);
+            if (msg.joltCount !== undefined) orb.setJoltCount(msg.joltCount);
+            if (msg.arcCount !== undefined) orb.setArcCount(msg.arcCount);
+            break;
+    }
+};
+// The renderer is authoritative on when sound actually starts — see the protocol doc.
+player.onPhase = (id, phase, ctxLatency) => link.send({ type: "playback", id, phase, ctxLatency });
+// Each speech onset launches a shockwave, so consonants read as impulses rather than only as level.
+player.onOnset = (strength) => orb.pulse(0.45 + strength * 0.55);
+link.connect();
+
+function submit(): void {
+    const text = textInput.value.trim();
+    if (!text) return;
+    // Any click or keypress counts as the gesture that unlocks audio; without one the context
+    // stays suspended, currentTime never advances, and the orb ignores speech entirely.
+    void player.unlock();
+    link.send({ type: "say", text, chain: chainSel.value });
+    textInput.value = "";
+}
+sendBtn.addEventListener("click", submit);
+textInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+});
+
 // Dev harness hook: lets tools/shoot.ts and ad-hoc checks read live orb state instead of
 // inferring it from pixels. readPixels returns empty after frame present unless
 // preserveDrawingBuffer is set, so pixel-sampling gives false negatives.
 (window as unknown as { __orb: () => unknown }).__orb = () => orb.debug;
 (window as unknown as { __freeze: () => void }).__freeze = () => orb.freeze();
 (window as unknown as { __solo: () => void }).__solo = () => orb.solo();
+(window as unknown as { __speech: () => unknown }).__speech = () => ({
+    connected: link.connected,
+    unlocked: player.unlocked,
+    speaking: player.speaking,
+    level: player.sample(),
+    progress: player.progress,
+    text: player.currentText,
+});
 
 const clock = new THREE.Clock();
 function frame(): void {
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
 
-    const target = simulate ? simulatedLevel(t) : Number(slider.value) / 100;
+    // Real speech outranks both stand-ins whenever it is playing.
+    const spoken = player.sample();
+    const target = spoken ?? (simulate ? simulatedLevel(t) : Number(slider.value) / 100);
     orb.setLevel(target, dt);
     orb.update(dt, t);
 
