@@ -209,12 +209,30 @@ interface HookState {
     backup?: string;
 }
 
+/**
+ * Enables or disables everything that only means something while narration is on.
+ *
+ * Leaving them live was misleading: picking a session and setting automatic mode look like they
+ * are doing something, and they are — but nothing is spoken, because the master switch is off.
+ * That produced two rounds of "it did not speak" against controls that were working correctly.
+ */
+function setNarrationDependentsEnabled(on: boolean): void {
+    autoFollow.disabled = !on;
+    focusSel.disabled = !on || autoFollow.checked;
+    $<HTMLInputElement>("subagents").disabled = !on;
+    for (const id of ["focushint"]) {
+        $(id).style.opacity = on ? "1" : "0.45";
+    }
+}
+
 function showHook(state: HookState): void {
     narrate.checked = state.installed;
     narrate.disabled = false;
     narrateHint.textContent = state.installed
         ? `On. Every Claude session reports to ${state.endpoint}. Edits ${state.settingsPath}.`
-        : `Off. Turning this on adds an async hook to ${state.settingsPath} so sessions report to Rasputin. Your settings are backed up first, and other hooks are left alone.`;
+        : `OFF — nothing is spoken. Turn this on to narrate sessions; it adds an async hook to ${state.settingsPath}, backs your settings up first, and leaves other hooks alone.`;
+    narrateHint.style.color = state.installed ? "" : "#ff9a6a";
+    setNarrationDependentsEnabled(state.installed);
 }
 
 async function refreshHook(): Promise<void> {
@@ -274,7 +292,7 @@ interface LiveSession {
  */
 let lastSessionKey = "";
 async function refreshSessions(): Promise<void> {
-    let data: { pinned: string | null; sessions: LiveSession[] };
+    let data: { pinned: string | null; enabled: boolean; sessions: LiveSession[] };
     try {
         data = await (await fetch(`${DAEMON_ORIGIN}/sessions`)).json();
     } catch {
@@ -292,7 +310,9 @@ async function refreshSessions(): Promise<void> {
     autoFollow.checked = wanted === "";
     // Disabled rather than hidden when automatic: the list is still worth seeing, and a control
     // that vanishes is harder to find again than one that is greyed.
-    focusSel.disabled = wanted === "";
+    focusSel.disabled = wanted === "" || !data.enabled;
+    autoFollow.disabled = !data.enabled;
+    $<HTMLInputElement>("subagents").disabled = !data.enabled;
     focusSel.innerHTML = "";
 
     for (const s of data.sessions) {
@@ -312,9 +332,11 @@ async function refreshSessions(): Promise<void> {
         focusSel.appendChild(opt);
     }
     focusSel.value = wanted || (data.sessions[0]?.sessionId ?? "");
-    focusHint.textContent = wanted
-        ? "Only this session is narrated. Others are ignored until you change this."
-        : `Narrates whichever session was most recently active — ${data.sessions.length} live. Shown as "Auto <project>" beside the tray icon.`;
+    focusHint.textContent = !data.enabled
+        ? `${data.sessions.length} sessions live, but narration is off — turn on "Narrate Claude sessions" above.`
+        : wanted
+          ? "Only this session is narrated. Others are ignored until you change this."
+          : `Narrates whichever session was most recently active — ${data.sessions.length} live. Shown as "Auto <session>" beside the tray icon.`;
 }
 
 focusSel.addEventListener("change", () => {
