@@ -118,9 +118,10 @@ export async function speak(text: string, chain = "measured"): Promise<SpeakMsg>
         id: randomUUID(),
         audioUrl: `/audio/${result.wavPath.split("/").pop()}`,
         timeline: toWire(timeline),
-        // What was SPOKEN, not what was typed — a transcript panel showing English while Russian
-        // plays would be actively misleading.
+        // What was SPOKEN, not what was typed.
         text: spoken,
+        // Kept separately so subtitles can show the meaning rather than the phonetics.
+        sourceText: spoken === text ? undefined : text,
         chain,
     };
     broadcast(msg);

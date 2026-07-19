@@ -15,6 +15,7 @@ import { Orb } from "./orb/orb.js";
 import { SpeechPlayer } from "./audio/feature-driver.js";
 import { DaemonLink } from "./net/client.js";
 import { DAEMON_PORT } from "../shared/protocol.js";
+import { Subtitle } from "./ui/subtitle.js";
 
 const canvas = document.getElementById("orb") as HTMLCanvasElement;
 
@@ -150,11 +151,13 @@ const DAEMON_ORIGIN =
     location.port === String(DAEMON_PORT) ? location.origin : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
 
 const player = new SpeechPlayer();
+const subtitle = new Subtitle();
 const link = new DaemonLink(`${DAEMON_ORIGIN.replace(/^http/, "ws")}/ws`, "chrome-dev");
 const textInput = document.getElementById("text") as HTMLInputElement;
 const chainSel = document.getElementById("chain") as HTMLSelectElement;
 const sendBtn = document.getElementById("send") as HTMLButtonElement;
 const linkTag = document.getElementById("link") as HTMLElement;
+const subBtn = document.getElementById("subs") as HTMLButtonElement;
 
 link.onOpen = () => {
     linkTag.textContent = "daemon connected";
@@ -173,10 +176,15 @@ link.onClose = () => {
 link.onMessage = (msg) => {
     switch (msg.type) {
         case "speak":
+            // sourceText over text: for og-warmind the Russian is what plays, but the English is
+            // what means anything — same division of labour as the game's own subtitles.
+            pendingSubtitle = msg.sourceText ?? msg.text;
+            subtitle.setCues(pendingSubtitle);
             void player.play(msg, DAEMON_ORIGIN).catch((e) => console.error("playback failed:", e));
             break;
         case "stop":
             player.stop();
+            subtitle.hide();
             break;
         case "pulse":
             orb.pulse(msg.strength);
@@ -193,8 +201,14 @@ link.onMessage = (msg) => {
             break;
     }
 };
-// The renderer is authoritative on when sound actually starts — see the protocol doc.
-player.onPhase = (id, phase, ctxLatency) => link.send({ type: "playback", id, phase, ctxLatency });
+// Subtitle timing follows PLAYBACK, not the speak message: on a cache miss the audio can be a
+// second behind the message, and a subtitle appearing before any sound reads as broken.
+let pendingSubtitle = "";
+player.onPhase = (id, phase, ctxLatency) => {
+    if (phase === "started") subtitle.update(0);
+    else subtitle.hideSoon();
+    link.send({ type: "playback", id, phase, ctxLatency });
+};
 // Each speech onset launches a shockwave, so consonants read as impulses rather than only as level.
 player.onOnset = (strength) => orb.pulse(0.45 + strength * 0.55);
 link.connect();
@@ -215,6 +229,10 @@ function submit(): void {
     }
 }
 sendBtn.addEventListener("click", submit);
+subBtn.addEventListener("click", () => {
+    subtitle.setEnabled(!subtitle.isEnabled);
+    subBtn.textContent = subtitle.isEnabled ? "subs on" : "subs off";
+});
 textInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submit();
 });
@@ -232,6 +250,9 @@ textInput.addEventListener("keydown", (e) => {
     level: player.sample(),
     progress: player.progress,
     text: player.currentText,
+    subtitle: subtitle.text,
+    subsEnabled: subtitle.isEnabled,
+    cues: subtitle.state,
 });
 
 const clock = new THREE.Clock();
@@ -244,6 +265,9 @@ function frame(): void {
     const target = spoken ?? (simulate ? simulatedLevel(t) : Number(slider.value) / 100);
     orb.setLevel(target, dt);
     orb.update(dt, t);
+
+    // Cues advance against playback progress, not a timer — see Subtitle.update.
+    if (player.speaking) subtitle.update(player.progress);
 
     readout.textContent = orb.level.toFixed(2);
     composer.render();

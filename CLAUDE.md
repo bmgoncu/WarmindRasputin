@@ -202,6 +202,10 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **Plain Helvetica has no middle weight — asking for 600 gives full Bold.** Measured on this
+  machine it renders only three distinct faces across 300-700: 300/400/500 are all Regular and
+  600/700 are both Bold. `document.fonts.check` is no help, it returns true for every weight of any
+  available family. Subtitles use **Helvetica Neue**, which has a real Medium at 500.
 - **A translation must be sanitized before it is spoken.** Models wrap output in quotes, add code
   fences, prefix `Translation:`, or append an alternative on a second line — every one of those
   gets read aloud. `sanitizeTranslation` strips them; the colon-label rule deliberately does not

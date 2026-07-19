@@ -39,8 +39,16 @@ export interface SpeakMsg {
     /** Path on the daemon, e.g. /audio/<sha>.wav */
     audioUrl: string;
     timeline: TimelineWire;
-    /** Source text, for a transcript panel and for debugging what was actually said. */
+    /** What is actually SPOKEN. For og-warmind this is the Russian, not what was typed. */
     text: string;
+    /**
+     * What was originally asked for, before any translation. Undefined when nothing was translated.
+     *
+     * Subtitles show this in preference to `text`, matching the game: Rasputin's speech is
+     * deliberately unintelligible and the subtitle is what carries the meaning. Showing the
+     * Russian that is playing would be accurate and useless.
+     */
+    sourceText?: string;
     /** Delivery mode — a chain name from voice/chains.ts. */
     chain: string;
 }
