@@ -14,7 +14,7 @@
     font: 12px ui-monospace, monospace; color: #c98a6a; user-select: none;
   }
   #ui input { width: 220px; }
-  #ui #shake, #ui #reach, #ui #jolts { width: 110px; }
+  #ui #shake, #ui #reach, #ui #jolts, #ui #arcs { width: 110px; }
   #ui label { display: flex; gap: 6px; align-items: center; }
   #ui button { font: inherit; background: #2a1512; color: #e6a883; border: 1px solid #5a2a1e;
                padding: 4px 10px; border-radius: 3px; cursor: pointer; }
@@ -34,6 +34,8 @@
     <span id="reachout">1.78</span>
     <label>jolts <input id="jolts" type="range" min="0" max="50" value="5" /></label>
     <span id="joltsout">5</span>
+    <label>arcs <input id="arcs" type="range" min="0" max="30" value="3" /></label>
+    <span id="arcsout">3</span>
   </div>
   <script type="module" src="./main.ts"></script>
 </body>

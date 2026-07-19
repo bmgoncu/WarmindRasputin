@@ -70,6 +70,30 @@ interface Jolt {
     strength: number;
 }
 
+/**
+ * A discharge jumping BETWEEN two unconnected nodes, across open space.
+ *
+ * The opposite of a Jolt in every respect, which is why it is a separate system rather than a
+ * jolt variant. A jolt walks existing edges and persists for seconds; an arc ignores the topology
+ * entirely, spans a gap no edge covers, and is gone in a fifth of a second. That contrast is the
+ * point — the jolt reads as current flowing through the structure, the arc as the structure
+ * failing to contain it.
+ *
+ * The polyline is baked into world space at spawn rather than tracked to its endpoint nodes. Over
+ * a ~0.2s life the nodes drift by far less than the arc's own jaggedness, so following them would
+ * cost per-frame basis math to buy nothing visible.
+ */
+interface Arc {
+    /** Baked world-space polyline, (ARC_SEGMENTS + 1) * 3. */
+    pts: Float32Array;
+    age: number;
+    life: number;
+    strength: number;
+}
+
+/** Kinks per arc. Below ~5 it reads as a bent stick, above ~10 the jaggedness turns to fuzz. */
+const ARC_SEGMENTS = 7;
+
 export interface GraphOptions {
     nodeCount: number;
     radius: number;
@@ -91,6 +115,8 @@ export interface GraphOptions {
     joltInterval: number;
     /** Cap on simultaneous jolts. */
     maxJolts: number;
+    /** Concurrent arcs to sustain. 0 disables. */
+    arcCount: number;
     /**
      * Mean jolt lifetime in seconds.
      *
@@ -209,12 +235,13 @@ export class NodeGraph {
     }
 
     /** Live counts for the dev harness — see window.__orb in main.ts. */
-    get debug(): { jolts: number; edges: number; nodes: number; litEdges: number; hops: number[]; shake: number; stat: Record<string, number> } {
+    get debug(): { jolts: number; edges: number; nodes: number; litEdges: number; arcs: number; hops: number[]; shake: number; stat: Record<string, number> } {
         return {
             jolts: this.jolts.length,
             edges: this.edges.length,
             nodes: this.opts.nodeCount,
             litEdges: this.jolts.reduce((n, j) => n + Math.ceil(j.tail) + 1, 0),
+            arcs: this.arcs.length,
             hops: this.jolts.map((j) => j.hops),
             shake: Math.sqrt(this.jitter.reduce((a, v) => a + v * v, 0) / this.jitter.length),
             stat: { ...this.joltStat },
@@ -236,6 +263,8 @@ export class NodeGraph {
     /** node -> connected node indices. Rebuilt with the edge set; jolts walk this. */
     private adjacency: number[][] = [];
     private jolts: Jolt[] = [];
+    private arcs: Arc[] = [];
+    private nextArc = 0.4;
     private nextJolt = 1.5;
     private joltStat = { spawned: 0, expired: 0, isolated: 0, rewired: 0, culled: 0 };
     private soloJolts = false;
@@ -652,6 +681,119 @@ export class NodeGraph {
     }
 
     /**
+     * Spawns and ages arcs.
+     *
+     * Unlike jolts, the spawn rate SHOULD rise with the count here. A jolt is an object you follow,
+     * so a fast spawn rate reads as flicker; an arc is a flash, so flashing more often is exactly
+     * what more arcs means. Lifetime therefore stays fixed and only the rate moves.
+     */
+    private updateArcs(dt: number): void {
+        const o = this.opts;
+
+        for (let i = this.arcs.length - 1; i >= 0; i--) {
+            this.arcs[i].age += dt;
+            if (this.arcs[i].age >= this.arcs[i].life) this.arcs.splice(i, 1);
+        }
+        if (o.arcCount <= 0) return;
+
+        // Mean arc life is ~0.2s, so sustaining N concurrent needs a spawn every 0.2/N seconds.
+        this.nextArc -= dt;
+        if (this.nextArc > 0 || this.arcs.length >= o.arcCount) return;
+        this.nextArc = (0.2 / o.arcCount) * (0.5 + Math.random());
+
+        const arc = this.makeArc();
+        if (arc) this.arcs.push(arc);
+    }
+
+    /**
+     * Picks two nodes far enough apart to have no edge between them and bakes a jagged path.
+     *
+     * Rejects adjacent pairs explicitly: an arc that happens to land on an existing edge is
+     * indistinguishable from a jolt and wastes the effect.
+     */
+    private makeArc(): Arc | null {
+        const o = this.opts;
+        const pos = this.nodePos;
+        const n = o.nodeCount;
+        const minSpan = 0.5 * o.radius;
+        const maxSpan = 1.3 * o.radius;
+
+        const a = Math.floor(Math.random() * n);
+        let b = -1;
+        for (let tries = 0; tries < 24; tries++) {
+            const cand = Math.floor(Math.random() * n);
+            if (cand === a || this.adjacency[a]?.includes(cand)) continue;
+            const d = Math.hypot(
+                pos[cand * 3] - pos[a * 3],
+                pos[cand * 3 + 1] - pos[a * 3 + 1],
+                pos[cand * 3 + 2] - pos[a * 3 + 2],
+            );
+            if (d >= minSpan && d <= maxSpan) {
+                b = cand;
+                break;
+            }
+        }
+        if (b < 0) return null;
+
+        const ax = pos[a * 3], ay = pos[a * 3 + 1], az = pos[a * 3 + 2];
+        const dx = pos[b * 3] - ax, dy = pos[b * 3 + 1] - ay, dz = pos[b * 3 + 2] - az;
+        const len = Math.hypot(dx, dy, dz);
+
+        // Two vectors perpendicular to the span, to displace the kinks into. The seed axis is
+        // chosen away from the span direction — cross product with a near-parallel vector
+        // collapses to zero length and the arc would come out perfectly straight.
+        const sx = Math.abs(dz) > 0.9 * len ? 1 : 0;
+        const sz = Math.abs(dz) > 0.9 * len ? 0 : 1;
+        let p1x = dy * sz - dz * 0, p1y = dz * sx - dx * sz, p1z = dx * 0 - dy * sx;
+        const p1l = Math.hypot(p1x, p1y, p1z) || 1;
+        p1x /= p1l; p1y /= p1l; p1z /= p1l;
+        let p2x = dy * p1z - dz * p1y, p2y = dz * p1x - dx * p1z, p2z = dx * p1y - dy * p1x;
+        const p2l = Math.hypot(p2x, p2y, p2z) || 1;
+        p2x /= p2l; p2y /= p2l; p2z /= p2l;
+
+        const pts = new Float32Array((ARC_SEGMENTS + 1) * 3);
+        const wander = len * 0.14;
+        for (let k = 0; k <= ARC_SEGMENTS; k++) {
+            const f = k / ARC_SEGMENTS;
+            // Displacement tapers to zero at both ends so the arc is anchored to its nodes rather
+            // than floating off them.
+            const taper = Math.sin(Math.PI * f);
+            const o1 = (Math.random() - 0.5) * wander * taper;
+            const o2 = (Math.random() - 0.5) * wander * taper;
+            pts[k * 3 + 0] = ax + dx * f + p1x * o1 + p2x * o2;
+            pts[k * 3 + 1] = ay + dy * f + p1y * o1 + p2y * o2;
+            pts[k * 3 + 2] = az + dz * f + p1z * o1 + p2z * o2;
+        }
+
+        return { pts, age: 0, life: 0.13 + Math.random() * 0.16, strength: 0.7 + Math.random() * 0.3 };
+    }
+
+    /** Emits every arc's polyline, brightest at strike and decaying with a per-frame flicker. */
+    private emitArcSegments(pts: number[], cols: number[]): void {
+        for (const arc of this.arcs) {
+            const k = arc.age / arc.life;
+            // Fast attack, decaying tail, plus a flicker — a smooth fade reads as a glowing wire
+            // rather than as a discharge.
+            const env = (1 - k) ** 0.55 * Math.min(1, k * 12) * (0.75 + Math.random() * 0.25);
+            const g = arc.strength * env * 3.2;
+            for (let i = 0; i < ARC_SEGMENTS; i++) {
+                pts.push(
+                    arc.pts[i * 3], arc.pts[i * 3 + 1], arc.pts[i * 3 + 2],
+                    arc.pts[i * 3 + 3], arc.pts[i * 3 + 4], arc.pts[i * 3 + 5],
+                );
+                // Hotter and whiter than the jolts, which lean warm — an arc is the brighter event.
+                cols.push(g, g * 0.97, g * 0.9, g, g * 0.97, g * 0.9);
+            }
+        }
+    }
+
+    /** Live tuning — concurrent arc count. Dev harness slider. */
+    setArcCount(n: number): void {
+        this.opts.arcCount = Math.max(0, n);
+        if (this.arcs.length > n) this.arcs.length = Math.max(0, n);
+    }
+
+    /**
      * Emits the lit sub-segments for every jolt.
      *
      * Walks backward from the head along the path, consuming `tail` edge-lengths and clipping to
@@ -791,6 +933,7 @@ export class NodeGraph {
         (this.points.geometry.getAttribute("aBright") as THREE.BufferAttribute).needsUpdate = true;
 
         this.updateJolts(dt, level);
+        this.updateArcs(dt);
         this.applySpeechJitter(t, level);
 
         this.sinceRebuild += dt;
@@ -866,6 +1009,7 @@ export class NodeGraph {
         this.points.visible = !this.soloJolts;
 
         this.emitJoltSegments(thickPts, thickCol);
+        this.emitArcSegments(thickPts, thickCol);
 
         // LineSegmentsGeometry has no draw-range equivalent, so it is rebuilt each frame from
         // however many edges are currently warm. That count is small (a scattered handful), so

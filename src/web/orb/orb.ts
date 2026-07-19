@@ -34,6 +34,8 @@ const WORLD_RADIUS = 1.9;
 const JOLT_LIFE = 3.5;
 const JOLT_MIN_INTERVAL = 0.35;
 const JOLT_MAX = 5;
+// Arcs jump gaps between unconnected nodes — see the Arc doc in graph.ts.
+const ARC_COUNT = 3;
 
 const SHAKE_INNER = 0.009;
 const SHAKE_OUTER = 0.013;
@@ -186,6 +188,7 @@ export class Orb {
             joltInterval: 0,
             maxJolts: 0,
             joltLife: JOLT_LIFE,
+            arcCount: 0,
             speechJitter: SHAKE_INNER,
             colour: 0xffb070,
             seed: 4242,
@@ -224,6 +227,7 @@ export class Orb {
             joltInterval: JOLT_LIFE / JOLT_MAX,
             maxJolts: JOLT_MAX,
             joltLife: JOLT_LIFE,
+            arcCount: ARC_COUNT,
             speechJitter: SHAKE_OUTER,
             colour: 0xff5f26,
             seed: 90210,
@@ -310,6 +314,11 @@ export class Orb {
         // slider should add currents to follow, not make sparks blink in and out.
         const life = Math.max(JOLT_LIFE, n * JOLT_MIN_INTERVAL);
         this.outer.setJolts(life / n, n, life);
+    }
+
+    /** Concurrent arcs jumping across the outer graph. Dev harness slider. */
+    setArcCount(n: number): void {
+        this.outer.setArcCount(n);
     }
 
     /** How far the outer lattice reaches past the r=1 shell. Dev harness slider. */

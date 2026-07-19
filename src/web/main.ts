@@ -65,6 +65,8 @@ const reach = document.getElementById("reach") as HTMLInputElement;
 const reachOut = document.getElementById("reachout") as HTMLElement;
 const jolts = document.getElementById("jolts") as HTMLInputElement;
 const joltsOut = document.getElementById("joltsout") as HTMLElement;
+const arcs = document.getElementById("arcs") as HTMLInputElement;
+const arcsOut = document.getElementById("arcsout") as HTMLElement;
 const readout = document.getElementById("readout") as HTMLElement;
 let simulate = false;
 
@@ -72,6 +74,12 @@ shake.addEventListener("input", () => {
     const k = Number(shake.value) / 100;
     orb.setShakeScale(k);
     shakeOut.textContent = `${k.toFixed(2)}x`;
+});
+
+arcs.addEventListener("input", () => {
+    const n = Number(arcs.value);
+    orb.setArcCount(n);
+    arcsOut.textContent = String(n);
 });
 
 jolts.addEventListener("input", () => {
