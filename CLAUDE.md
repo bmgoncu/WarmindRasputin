@@ -23,6 +23,10 @@ Full design and milestones: `~/.claude/plans/cosmic-bouncing-clarke.md`.
 - **Reference media stays local.** `assets/refs/` is gitignored. This repo contains no downloader.
 - **Every gotcha gets a one-line entry** in *Critical conventions & gotchas* below. If a fix
   depended on a non-obvious quirk, it is not done until it's noted here.
+- **Any new requirement updates `scripts/setup.sh` AND `docs/BUILD.md` in the same commit.**
+  A dependency, system tool, voice, or CLI that someone must have is not added until the setup
+  script detects it and the build doc says why it was chosen over the alternatives. `setup.sh
+  --check` is the contract: if it passes on a clean machine, the project runs.
 
 ## Entry points
 
@@ -35,6 +39,7 @@ Full design and milestones: `~/.claude/plans/cosmic-bouncing-clarke.md`.
 | Speak a line through the daemon | `curl -s localhost:7331/speak -d '{"text":"..."}' -H 'content-type: application/json'` |
 | Screenshot the orb | `npx tsx tools/shoot.ts <level> <out.png>` |
 | Isolate one animated system | `ORB_FREEZE=1` (stop drift/spin/pulses) · `ORB_SOLO=1` (jolts alone) |
+| Setup / preflight | `./scripts/setup.sh` · `--check` to verify only |
 | Tests | `npm test` |
 | Typecheck both halves | `npm run typecheck` |
 | Typecheck / build | `npm run build` |
@@ -202,6 +207,11 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **`cmd | grep -q` under `set -o pipefail` reports failure on a MATCH.** grep exits at the first
+  hit, the producer takes SIGPIPE, and pipefail surfaces its 141. In `setup.sh` this presented as
+  seven ffmpeg filters missing from a build that had them — and only the ones early in the
+  alphabetical listing, because late matches let grep drain the output first. Capture once into a
+  variable, then grep that.
 - **A running daemon does not pick up server-side edits — `npm run daemon` uses `tsx watch`.**
   Plain `tsx` has no reload, and a stale daemon answers every request normally while serving old
   code, so a fix appears not to work. `GET /health` reports `startedAt` and `pid`; compare it

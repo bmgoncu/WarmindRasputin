@@ -8,6 +8,7 @@
   },
   "main": "lib/server/daemon.js",
   "scripts": {
+    "setup": "./scripts/setup.sh",
     "build": "tsc",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json",
     "typecheck:web": "tsc -p tsconfig.web.json",
