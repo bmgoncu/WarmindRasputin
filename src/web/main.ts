@@ -75,9 +75,9 @@ shake.addEventListener("input", () => {
 });
 
 jolts.addEventListener("input", () => {
-    const k = Number(jolts.value) / 100;
-    orb.setJoltDensity(k);
-    joltsOut.textContent = `${k.toFixed(2)}x`;
+    const n = Number(jolts.value);
+    orb.setJoltCount(n);
+    joltsOut.textContent = String(n);
 });
 
 // How far the outer lattice reaches past the shell. Capped at 2.2: the camera sits at z=5.6 with

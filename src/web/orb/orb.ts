@@ -26,9 +26,11 @@ import { NodeGraph, type Pulse } from "./graph.js";
 const OUTER_RADIUS = 1.78;
 const WORLD_RADIUS = 1.9;
 
-// Jolt density base. The harness slider scales the interval down and the cap up together — one
-// without the other either starves the graph or lets a burst spawn and then go quiet.
-const JOLT_INTERVAL = 1.05;
+// Jolt density. The slider sets the concurrent cap directly and the spawn interval is derived
+// from it: with a mean jolt lifetime of ~3.5s and the spawn timer's own 1.2x mean jitter, an
+// interval of JOLT_FILL/cap settles at roughly 0.85 of the cap — full enough to look dense,
+// short enough that the count still varies instead of sitting pinned at the ceiling.
+const JOLT_FILL = 3.4;
 const JOLT_MAX = 5;
 
 const SHAKE_INNER = 0.009;
@@ -216,7 +218,7 @@ export class Orb {
             // Outer shell takes the visible push; the inner volume moves less.
             pushScale: 0.13,
             // Electric jolts walk the outer shell only.
-            joltInterval: JOLT_INTERVAL,
+            joltInterval: JOLT_FILL / JOLT_MAX,
             maxJolts: JOLT_MAX,
             speechJitter: SHAKE_OUTER,
             colour: 0xff5f26,
@@ -286,13 +288,19 @@ export class Orb {
     }
 
     /** Live state for the dev harness. */
-    /** Scales jolt density, 0-2x of the tuned base. Dev harness slider. */
-    setJoltDensity(k: number): void {
-        if (k <= 0) {
+    /**
+     * Sets the concurrent jolt cap, 0-50. Dev harness slider.
+     *
+     * The spawn interval has to shorten as the cap rises or the cap is never reached — at a fixed
+     * 0.68s spawn rate a cap of 50 would sit a fifth full, since jolts expire after 2.2-4.8s and
+     * the graph reaches equilibrium long before the ceiling.
+     */
+    setJoltCount(n: number): void {
+        if (n <= 0) {
             this.outer.setJolts(0, 0);
             return;
         }
-        this.outer.setJolts(JOLT_INTERVAL / k, Math.max(1, Math.round(JOLT_MAX * k)));
+        this.outer.setJolts(JOLT_FILL / n, n);
     }
 
     /** How far the outer lattice reaches past the r=1 shell. Dev harness slider. */

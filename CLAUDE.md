@@ -195,6 +195,9 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   outputs nothing is pixel-identical to manual idle, so a broken envelope reads as a broken button
   instead. The harness's simulated speech had an 11-second silence for exactly this reason —
   measure a driver's per-second peak over a full minute before trusting it, don't watch it.
+- **Never pass a named function expression to `page.evaluate` from a `tsx` script.** esbuild
+  rewrites it to call its `__name` helper, which does not exist inside the page, so it throws
+  `ReferenceError: __name is not defined`. Pass the probe as a source string instead.
 - **A frame-difference image cannot isolate one animated system.** Drift, spin, edge shimmer, edge
   aging and pulses all animate every frame, so diffing consecutive frames lights up the entire
   graph and says nothing about the system under test. Use `ORB_FREEZE=1` to stop the ambient
