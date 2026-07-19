@@ -75,12 +75,34 @@ modeBtn.addEventListener("click", () => {
     slider.disabled = simulate;
 });
 
-/** Rough stand-in for a speech envelope: syllable-rate bursts with pauses between phrases. */
+/**
+ * Rough stand-in for a speech envelope: syllable-rate bursts grouped into phrases, with short
+ * pauses between them.
+ *
+ * Timings are taken from speech rather than invented. English runs 4–7 syllables/s; phrases last
+ * a couple of seconds and the gaps between them are under a second.
+ *
+ * The first version gated phrases with a 0.21 rad/s sine — a 30-second cycle that left an
+ * ELEVEN-SECOND continuous silence, 22 dead seconds in every 60. Clicking into simulate mode
+ * during one looked exactly like a broken button, and the idle floor hid it completely: at a
+ * constant 0.22 a dead stretch is pixel-identical to manual idle, where before it at least went
+ * dark. Its syllable rate was also 1.75 Hz, under half of speech.
+ */
 function simulatedLevel(t: number): number {
-    const syllable = Math.max(0, Math.sin(t * 11) * 0.5 + 0.5) ** 1.6;
-    const phrase = Math.max(0, Math.sin(t * 0.55) * 0.5 + 0.62);
-    const gate = Math.sin(t * 0.21) > -0.3 ? 1 : 0;
-    return Math.min(1, syllable * phrase * gate);
+    // One phrase plus its trailing pause. Phrase length varies per cycle so repeated cycles don't
+    // line up into a metronome, but every cycle speaks — there is no long dead window by design.
+    const CYCLE = 3.2;
+    const k = Math.floor(t / CYCLE);
+    const local = t - k * CYCLE;
+    const speak = 2.3 + 0.55 * Math.sin(k * 2.399);
+    if (local > speak) return 0; // the pause between phrases, 0.35–1.45s
+
+    // 4.5 Hz syllables, with an arc over the phrase so it doesn't start and stop abruptly and a
+    // slower stress wave so some syllables land harder than others.
+    const syllable = Math.max(0, Math.sin(t * 28.3)) ** 0.8;
+    const arc = Math.sin(Math.PI * (local / speak)) ** 0.35;
+    const stress = 0.6 + 0.4 * Math.sin(t * 3.1 + k);
+    return Math.min(1, syllable * arc * stress * 1.25);
 }
 
 // Dev harness hook: lets tools/shoot.ts and ad-hoc checks read live orb state instead of
