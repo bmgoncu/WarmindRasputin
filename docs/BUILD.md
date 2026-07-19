@@ -313,6 +313,11 @@ means owning the process.
   "shall I proceed?" gate belongs in `canUseTool`, and until it exists the safe mode is the one
   that stops and asks.
 - Driven and observed speech share one queue, so they cannot talk over each other.
+- **A driven session is not the terminal session you are looking at, and cannot be.** There are no
+  FIFOs and no sockets under `~/.claude/` — verified again, still zero. It runs as its own session
+  and follows the focused project's cwd, so a spoken instruction acts on the repo on screen rather
+  than on the daemon's own. Its id is logged with a `claude --resume` line, since it is spoken
+  rather than shown.
 
 ### Voice input
 

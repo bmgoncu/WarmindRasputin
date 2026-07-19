@@ -115,11 +115,14 @@ export class ClaudeDriver {
     private queue: MessageQueue | null = null;
     private running = false;
     private sessionId: string | null = null;
+    private cwd: string;
 
     constructor(
         private readonly events: DriverEvents,
         private readonly opts: DriverOptions = {},
-    ) {}
+    ) {
+        this.cwd = opts.cwd ?? process.cwd();
+    }
 
     get isRunning(): boolean {
         return this.running;
@@ -132,6 +135,29 @@ export class ClaudeDriver {
     /** Session id allocated by the SDK, once known. */
     get ownSessionId(): string | null {
         return this.sessionId;
+    }
+
+    /**
+     * Where the driven session runs.
+     *
+     * Follows the session being observed, so a spoken instruction acts on the project you are
+     * actually looking at. Without this it ran in the daemon's own directory and every voice
+     * command operated on the Rasputin repo, whatever was on screen.
+     *
+     * Changing it closes the current session: cwd is fixed when the agent starts, so a new
+     * directory genuinely needs a new one.
+     */
+    setCwd(cwd: string): void {
+        if (cwd === this.cwd) return;
+        this.cwd = cwd;
+        if (this.session) {
+            this.events.log(`working directory changed to ${cwd} — starting a fresh session`);
+            this.close();
+        }
+    }
+
+    get workingDir(): string {
+        return this.cwd;
     }
 
     /**
@@ -154,7 +180,7 @@ export class ClaudeDriver {
         const session = query({
             prompt: queue,
             options: {
-                cwd: this.opts.cwd ?? process.cwd(),
+                cwd: this.cwd,
                 ...(this.opts.model ? { model: this.opts.model } : {}),
                 permissionMode: this.opts.permissionMode ?? "default",
                 maxTurns: this.opts.maxTurns ?? 24,

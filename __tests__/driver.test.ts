@@ -1,4 +1,4 @@
-import { MessageQueue } from "../src/server/claude/driver.js";
+import { MessageQueue, ClaudeDriver } from "../src/server/claude/driver.js";
 
 /** Drains up to `n` messages, or fewer if the queue closes first. */
 async function take(q: MessageQueue, n: number): Promise<string[]> {
@@ -64,5 +64,33 @@ describe("MessageQueue", () => {
             expect(m.parent_tool_use_id).toBeNull();
             break;
         }
+    });
+});
+
+describe("working directory", () => {
+    const make = () => {
+        const logs: string[] = [];
+        const d = new ClaudeDriver(
+            { say: () => undefined, state: () => undefined, log: (m) => logs.push(m), session: () => undefined },
+            { cwd: "/start/here" },
+        );
+        return { d, logs };
+    };
+
+    it("starts in the directory it was given", () => {
+        expect(make().d.workingDir).toBe("/start/here");
+    });
+
+    it("follows a new project", () => {
+        // Without this a spoken instruction acts on the daemon's own repo, whatever is on screen.
+        const { d } = make();
+        d.setCwd("/Users/x/Depo/merge-mogul");
+        expect(d.workingDir).toBe("/Users/x/Depo/merge-mogul");
+    });
+
+    it("ignores a change to the same directory", () => {
+        const { d, logs } = make();
+        d.setCwd("/start/here");
+        expect(logs).toEqual([]);
     });
 });

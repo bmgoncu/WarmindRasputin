@@ -199,6 +199,9 @@ const observer = new SessionObserver({
     state: (state) => broadcast({ type: "state", state }),
     focus: (info) => {
         lastFocus = { type: "focus", ...info };
+        // A spoken instruction should act on the project being watched, not on the daemon's own
+        // directory. Following focus is what makes "run the tests" mean the right repo.
+        if (info.cwd) driver.setCwd(info.cwd);
         broadcast(lastFocus);
     },
 });
@@ -210,6 +213,7 @@ const observer = new SessionObserver({
  * this the tray would sit blank until the next session event, which can be minutes.
  */
 let lastFocus: ServerMsg & { type: "focus" } = { type: "focus", sessions: 0 };
+let drivenSessionId: string | null = null;
 
 /**
  * The session Rasputin runs himself.
@@ -252,8 +256,11 @@ const driver = new ClaudeDriver({
     state: (state) => broadcast({ type: "state", state }),
     log: (message) => console.log(`driver: ${message}`),
     session: (sessionId) => {
-        console.log(`driver session ${sessionId.slice(0, 8)} — excluded from narration`);
+        drivenSessionId = sessionId;
         observer.excludeSession(sessionId);
+        // Printed in full and resumable on purpose: a driven session is spoken, not shown, so
+        // without this there is no way to read back what was actually asked and answered.
+        console.log(`driver session ${sessionId} — read it with: claude --resume ${sessionId}`);
     },
 });
 
@@ -396,6 +403,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
             JSON.stringify({
+                driven: drivenSessionId,
+                drivenCwd: driver.workingDir,
                 enabled: observer.isEnabled,
                 subagents: observer.isNarratingSubagents,
                 pinned: observer.pinnedSession,

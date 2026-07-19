@@ -99,7 +99,13 @@ off and **Listen to** pins one, listed as `project — session — status`. **Na
 is off by default: delegated output is a different voice reporting internal progress and buries the
 session's own answers.
 
-**Hold Cmd+Shift+Space** to talk: the orb goes dark while listening, then Claude answers aloud.
+**Hold Cmd+Shift+Space** to talk: the orb goes dark while listening, Rasputin acknowledges
+immediately, then Claude answers aloud.
+
+Voice drives a **separate** Claude session, not the terminal you are watching — Claude Code has no
+channel for injecting input into a running session, so driving one means owning the process. That
+session follows the project currently in focus, and the daemon logs
+`claude --resume <id>` so the exchange can be read back.
 **Cmd+Shift+R** toggles between *ambient* (visible, click-through) and *interactive* (focused,
 controls shown). Preferences holds the orb tuning, subtitles, default voice mode, opaque-vs-
 transparent background, launch-at-login, and overlay position, plus a **Test voice** button that
