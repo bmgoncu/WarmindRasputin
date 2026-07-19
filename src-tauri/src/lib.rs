@@ -359,6 +359,22 @@ pub fn run() {
                 }
             })?;
 
+            // Hold Cmd+Shift+Space to talk. Press and release are distinct events, which is what
+            // makes hold-to-talk possible at all — the speaker decides when they have finished
+            // rather than the software guessing at a pause.
+            //
+            // Relayed to the renderer rather than called directly: it already holds the daemon
+            // socket, so this crate needs no HTTP client of its own.
+            let talk = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
+            let talk_handle = app.handle().clone();
+            app.global_shortcut().on_shortcut(talk, move |_app, _shortcut, event| {
+                let phase = match event.state() {
+                    ShortcutState::Pressed => "down",
+                    ShortcutState::Released => "up",
+                };
+                let _ = talk_handle.emit("push-to-talk", phase);
+            })?;
+
             Ok(())
         })
         .build(tauri::generate_context!())

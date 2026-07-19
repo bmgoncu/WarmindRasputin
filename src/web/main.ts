@@ -265,7 +265,9 @@ link.onMessage = (msg) => {
             orb.pulse(msg.strength);
             break;
         case "state":
-            // M3 renders speech only; the rest of the state machine lands with the overlay.
+            // Listening is the one state with a visual of its own so far: the orb goes dark, so
+            // "waiting on you" cannot be confused with "idle".
+            orb.setListening(msg.state === "listening");
             break;
         case "focus":
             setTrayLabel(msg.project, msg.name, msg.sessions, msg.pinned === true);
@@ -347,6 +349,17 @@ textInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submit();
 });
 
+// Push-to-talk, relayed from the Rust global hotkey. Held: capture. Released: transcribe and send.
+if (inOverlay()) {
+    const bridge = (window as unknown as {
+        __TAURI__?: { event?: { listen: (n: string, cb: (e: { payload: unknown }) => void) => Promise<unknown> } };
+    }).__TAURI__;
+    void bridge?.event?.listen("push-to-talk", (e) => {
+        const phase = e.payload === "down" ? "down" : "up";
+        link.send({ type: "listen", phase });
+    });
+}
+
 // Dev harness hook: lets tools/shoot.ts and ad-hoc checks read live orb state instead of
 // inferring it from pixels. readPixels returns empty after frame present unless
 // preserveDrawingBuffer is set, so pixel-sampling gives false negatives.
@@ -360,6 +373,11 @@ if (overlayActive) console.log("running as overlay — Cmd+Shift+R toggles inter
 (window as unknown as { __orb: () => unknown }).__orb = () => orb.debug;
 (window as unknown as { __freeze: () => void }).__freeze = () => orb.freeze();
 (window as unknown as { __solo: () => void }).__solo = () => orb.solo();
+// Feeds a message through the real handler, so tests exercise the same path the daemon drives
+// rather than poking at the orb directly and proving nothing about the wiring.
+(window as unknown as { __feed: (m: unknown) => void }).__feed = (msg) =>
+    link.onMessage?.(msg as Parameters<NonNullable<typeof link.onMessage>>[0]);
+
 (window as unknown as { __speech: () => unknown }).__speech = () => ({
     connected: link.connected,
     unlocked: player.unlocked,

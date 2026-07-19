@@ -30,6 +30,7 @@ import { SessionObserver, type HookPayload } from "./claude/observer.js";
 import { hookState, setHook } from "./claude/install-hook.js";
 import { readSessions } from "./claude/sessions.js";
 import { ClaudeDriver } from "./claude/driver.js";
+import { VoiceInput } from "./voice/listen.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -214,6 +215,31 @@ let lastFocus: ServerMsg & { type: "focus" } = { type: "focus", sessions: 0 };
  * Its speech goes through the same queue as the observer's, so a driven answer and a narrated one
  * cannot talk over each other.
  */
+const voice = new VoiceInput({ log: (m) => console.log(`voice: ${m}`) });
+
+/**
+ * Starts capturing and darkens the orb.
+ *
+ * The orb dropping to zero is the whole feedback signal — with the idle floor at 0.22 there is
+ * otherwise nothing to distinguish "listening" from "sitting there".
+ */
+async function listenDown(): Promise<void> {
+    if (await voice.start()) broadcast({ type: "state", state: "listening" });
+}
+
+/** Transcribes and sends the result to Claude. */
+async function listenUp(): Promise<void> {
+    broadcast({ type: "state", state: "thinking" });
+    const text = await voice.stop();
+    if (!text) {
+        console.log("voice: nothing transcribed");
+        broadcast({ type: "state", state: "idle" });
+        return;
+    }
+    console.log(`heard: ${text}`);
+    driver.ask(text);
+}
+
 const driver = new ClaudeDriver({
     say: (text) => enqueueSpeech(text),
     state: (state) => broadcast({ type: "state", state }),
@@ -300,6 +326,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
             }
             return;
         }
+    }
+
+    // Push-to-talk over HTTP too, so it can be driven from a script or a hotkey daemon.
+    if (url.pathname === "/listen" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)) || "{}") as { phase?: string };
+        if (body.phase === "down") void listenDown();
+        else if (body.phase === "up") void listenUp();
+        else void voice.cancel();
+        res.writeHead(202, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, recording: voice.isRecording }));
+        return;
     }
 
     // Drive Claude over HTTP as well as the socket, so it is scriptable and testable by hand.
@@ -407,6 +444,11 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                 case "interrupt":
                     void driver.interrupt();
                     break;
+                case "listen":
+                    if (parsed.phase === "down") void listenDown();
+                    else if (parsed.phase === "up") void listenUp();
+                    else void voice.cancel().then(() => broadcast({ type: "state", state: "idle" }));
+                    break;
                 case "set-config": {
                     const { type: _ignored, ...patch } = parsed;
                     config = { ...config, ...patch };
@@ -441,6 +483,9 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
         if (state.installed) console.log("narration on — hook is installed");
     });
     observer.start();
+    // Warm the model in the background so the first push-to-talk is not the one that waits a
+    // minute for a cold load.
+    void voice.ensureServer();
 
     // Started by the overlay: exit when its stdin pipe closes.
     //

@@ -83,8 +83,7 @@ Rasputin is deliberately unintelligible and the subtitle carries the meaning.
 
 M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding · M4 overlay shell ·
 M5 observe sessions — **done**.
-M6 drive Claude — text half done, voice input pending. M7 persona · M8 standalone app and
-release — pending.
+M6 drive Claude — done. M7 persona · M8 standalone app and release — pending.
 
 The overlay is a **menu-bar app** — no Dock icon. Its tray glyph carries the menu:
 Show Orb · Interactive · Move Overlay · Preferences… · Quit. Beside the glyph it names the Claude
@@ -100,6 +99,7 @@ off and **Listen to** pins one, listed as `project — session — status`. **Na
 is off by default: delegated output is a different voice reporting internal progress and buries the
 session's own answers.
 
+**Hold Cmd+Shift+Space** to talk: the orb goes dark while listening, then Claude answers aloud.
 **Cmd+Shift+R** toggles between *ambient* (visible, click-through) and *interactive* (focused,
 controls shown). Preferences holds the orb tuning, subtitles, default voice mode, opaque-vs-
 transparent background, launch-at-login, and overlay position, plus a **Test voice** button that

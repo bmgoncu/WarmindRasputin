@@ -180,6 +180,17 @@ export interface InterruptMsg {
     type: "interrupt";
 }
 
+/**
+ * Push-to-talk. `down` starts capturing, `up` transcribes and sends the result to Claude.
+ *
+ * Two messages rather than one with a duration, because the whole point of push-to-talk is that
+ * the speaker decides when they have finished.
+ */
+export interface ListenMsg {
+    type: "listen";
+    phase: "down" | "up" | "cancel";
+}
+
 /** A settings change from the preferences window. The daemon persists it and rebroadcasts. */
 export interface SetConfigMsg extends OrbConfig {
     type: "set-config";
@@ -203,7 +214,16 @@ export interface LogMsg {
     message: string;
 }
 
-export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | AskMsg | InterruptMsg | SetConfigMsg | GetConfigMsg | LogMsg;
+export type ClientMsg =
+    | HelloMsg
+    | PlaybackMsg
+    | SayMsg
+    | AskMsg
+    | InterruptMsg
+    | ListenMsg
+    | SetConfigMsg
+    | GetConfigMsg
+    | LogMsg;
 
 /**
  * Narrows an unknown parsed JSON value to a ServerMsg.
@@ -228,6 +248,7 @@ export function isClientMsg(v: unknown): v is ClientMsg {
         t === "say" ||
         t === "ask" ||
         t === "interrupt" ||
+        t === "listen" ||
         t === "set-config" ||
         t === "get-config" ||
         t === "log"

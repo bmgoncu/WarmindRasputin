@@ -367,7 +367,7 @@ export class Orb {
     }
 
     get debug(): Record<string, unknown> {
-        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this._level, idleFloor: this._idleFloor };
+        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this._level, idleFloor: this._idleFloor, listening: this.listening };
     }
 
     /**
@@ -378,6 +378,7 @@ export class Orb {
      * waiting. 0.22 is the level where both are legible while still sitting clearly below speech.
      */
     private _idleFloor = 0.22;
+    private listening = false;
 
     get idleFloor(): number {
         return this._idleFloor;
@@ -390,9 +391,28 @@ export class Orb {
         this.outer.setJitterFloor(v);
     }
 
+    /**
+     * Listening mode: the orb goes dark and holds there.
+     *
+     * The idle floor exists so the orb never reads as switched off — but while listening, going
+     * quiet is exactly the point. Dropping to 0 is the clearest possible signal that Rasputin has
+     * stopped talking and is waiting on you, and it distinguishes listening from merely idle,
+     * which the floor would otherwise make identical.
+     *
+     * The existing release ballistics carry it down over ~220ms rather than cutting, so it reads
+     * as attention rather than as a fault.
+     */
+    setListening(on: boolean): void {
+        this.listening = on;
+    }
+
+    get isListening(): boolean {
+        return this.listening;
+    }
+
     /** VU ballistics — fast attack, slow release, frame-rate independent. */
     setLevel(target: number, dt: number): void {
-        target = Math.max(target, this._idleFloor);
+        target = this.listening ? 0 : Math.max(target, this._idleFloor);
         const tau = (target > this._level ? 30 : 220) / 1000;
         this._level += (target - this._level) * (1 - Math.exp(-dt / tau));
     }

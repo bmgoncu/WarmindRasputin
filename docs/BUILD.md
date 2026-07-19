@@ -314,6 +314,20 @@ means owning the process.
   that stops and asks.
 - Driven and observed speech share one queue, so they cannot talk over each other.
 
+### Voice input
+
+- **Use `whisperkit-cli serve`, never `transcribe` per utterance.** The subcommand reloads its
+  model every invocation: **6.4s warm** for a 2.6s clip, against **0.13s** through the server's
+  OpenAI-compatible `/v1/audio/transcriptions`. Fifty times, and the difference between
+  push-to-talk feeling instant and feeling broken.
+- **The server binds to `::1`.** `http://127.0.0.1:50060` fails to connect; use `localhost`.
+- **Stop the recorder with SIGINT, not SIGKILL.** ffmpeg finalises the WAV header on the way out;
+  a killed process leaves a header claiming zero length, which decoders read as an empty clip.
+- **Denied microphone access is not the usual cause of silence.** Check the level before assuming
+  it: a capture here measured 95.4% non-zero samples with a peak of 184/32767 — real audio from a
+  granted device, just a quiet room. `VoiceInput` reports the RMS so this is visible rather than a
+  mute failure.
+
 ## 8. Editing the user's Claude settings
 
 `~/.claude/settings.json` governs every Claude session on the machine, so the hook installer is
