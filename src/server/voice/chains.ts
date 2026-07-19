@@ -91,6 +91,20 @@ export interface VoiceChain {
     formantSemitones: number;
     /** Whether sample-level glitch + ring modulation apply to this chain. */
     effects: boolean;
+    /**
+     * `say -v` voice for this chain. Falls back to RASPUTIN_VOICE, then Tom (Enhanced).
+     *
+     * Per-chain rather than global because og-warmind needs a ru_RU voice while every other chain
+     * wants the neural en-US one — the accent and the neural quality cannot both be had.
+     */
+    voice?: string;
+    /**
+     * Translate the source text into this language before speaking it. Undefined = speak as given.
+     *
+     * Carried on the chain rather than passed per-render so the mode is one selection, not a
+     * setting the caller has to remember to pair with the right voice.
+     */
+    translateTo?: string;
     /** Chain-level tuning defaults. A per-render `tuning` merges on top of this. */
     tuning?: ChainTuning;
     /** Chain-level glitch defaults, merged over DEFAULT_GLITCH. */
@@ -220,6 +234,29 @@ export const CHAINS: Record<string, VoiceChain> = {
         pitchSemitones: -2,
         formantSemitones: -1,
         effects: true,
+        build: (tuning = {}) => buildWarmind(RATE, tuning),
+    },
+    /**
+     * The original article: a Russian voice speaking Russian, degraded hard.
+     *
+     * Every other chain is an en-US neural voice wearing an accent. This one translates first and
+     * uses Yuri, so the phonetics are genuinely Russian rather than approximated. Intelligibility
+     * is not a goal here in the way it is elsewhere — the listener is not expected to parse the
+     * Russian, so the degradation can run at full warmind strength.
+     *
+     * Pitch is -3 rather than warmind's -2: Yuri measures F0 96.8 Hz against Tom's ~109 after
+     * shifting, and -3 lands Yuri at 81.4 Hz, essentially on the reference's 80.5.
+     */
+    "og-warmind": {
+        name: "og-warmind",
+        description: "Yuri speaking Russian, full warmind degradation. Input is translated first.",
+        rate: RATE,
+        wpm: 145,
+        pitchSemitones: -3,
+        formantSemitones: -1,
+        effects: true,
+        voice: "Yuri (Enhanced)",
+        translateTo: "Russian",
         build: (tuning = {}) => buildWarmind(RATE, tuning),
     },
     measured: {

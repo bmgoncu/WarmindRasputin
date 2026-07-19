@@ -73,13 +73,23 @@ preferred by ear over Yuri — the neural quality beat the accent. Tom sits at ~
 −2 st shift, above the reference's 80.5 Hz; `pitchSemitones: -6` would match it if that's wanted.
 
 **Three delivery modes**, same voice and same pitch — only the degradation differs, so it reads as
-one character speaking with more or less composure. Selected per utterance (M7).
+one character speaking with more or less composure. Selected per utterance (M7). A fourth,
+`og-warmind`, changes voice *and* language and is described below the table.
 
 | Mode | Glitch | Crush | Room | Ring | Use for |
 |---|---|---|---|---|---|
 | `warmind` | 2.0/s, anywhere | 7 bit | 0.12/0.06 | 20% | Roleplay, flourishes, the ignition line |
 | `measured` | punctuation + 0.55/s scatter | 10 bit | 0.07/0.04 | 11% | Default. Character intact, words legible |
 | `plain` | 0.6/s | 11 bit | 0.06/0.03 | 8% | Long reports you need to parse |
+| `og-warmind` | as `warmind` | 7 bit | 0.12/0.06 | 20% | The original article — Russian, Yuri |
+
+**`og-warmind`** translates the text to Russian, then speaks it with **Yuri (Enhanced)** (ru_RU,
+male) at −3 semitones. Measured F0 **78.6 Hz** against the reference's 80.5 — the closest match in
+the project; `warmind` measures 139 Hz on the same line. Intelligibility is explicitly *not* a goal
+here, since the listener is not expected to parse the Russian, so degradation runs at full strength.
+Translation goes through the authenticated `claude` CLI (there is no `ANTHROPIC_API_KEY` on this
+machine), is cached on disk under `cache/translate/`, and **fails soft** — if the CLI is missing or
+slow, the source text is spoken instead of nothing. A cache hit is ~320x faster (3.2s → 0.01s).
 
 Base voice is **Tom (Enhanced)**, en-US — chosen by ear over the Russian-accented Yuri.
 
@@ -192,6 +202,10 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **A translation must be sanitized before it is spoken.** Models wrap output in quotes, add code
+  fences, prefix `Translation:`, or append an alternative on a second line — every one of those
+  gets read aloud. `sanitizeTranslation` strips them; the colon-label rule deliberately does not
+  fire on a real sentence like `Внимание: ...`.
 - **The analysis tap and the played wav must stay the same signal.** `synthesize` returns both
   from one `asplit`; verified by cross-correlating their envelopes — correlation 1.0000 at lag 0.
   If a chain change ever splits them, every utterance goes silently out of sync and it will look

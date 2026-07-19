@@ -24,6 +24,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 
 import { synthesize } from "./voice/synth.js";
 import { extractTimeline, toWire } from "./audio/timeline.js";
+import { getChain } from "./voice/chains.js";
+import { translate } from "./voice/translate.js";
 import { DAEMON_PORT, isClientMsg, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const CACHE_DIR = resolve("cache");
@@ -98,14 +100,27 @@ function readBody(req: IncomingMessage): Promise<string> {
  * and caching it separately would add a second invalidation path to get wrong.
  */
 export async function speak(text: string, chain = "measured"): Promise<SpeakMsg> {
-    const result = await synthesize({ text, chain, cacheDir: CACHE_DIR });
+    // Translation happens here rather than inside synthesize so the audio cache stays a pure
+    // function of the text it actually renders — and so a cached translation short-circuits
+    // before any ffmpeg work is considered.
+    const target = getChain(chain).translateTo;
+    let spoken = text;
+    if (target) {
+        const t = await translate({ text, lang: target, cacheDir: CACHE_DIR });
+        spoken = t.text;
+        console.log(`translated${t.cached ? " (cached)" : ""}: ${text} -> ${spoken}`);
+    }
+
+    const result = await synthesize({ text: spoken, chain, cacheDir: CACHE_DIR });
     const timeline = extractTimeline(result.samples, result.sampleRate);
     const msg: SpeakMsg = {
         type: "speak",
         id: randomUUID(),
         audioUrl: `/audio/${result.wavPath.split("/").pop()}`,
         timeline: toWire(timeline),
-        text,
+        // What was SPOKEN, not what was typed — a transcript panel showing English while Russian
+        // plays would be actively misleading.
+        text: spoken,
         chain,
     };
     broadcast(msg);

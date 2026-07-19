@@ -98,8 +98,10 @@ async function readF32(path: string): Promise<Float32Array> {
 
 export async function synthesize(opts: SynthOptions): Promise<SynthResult> {
     const chainName = opts.chain ?? process.env.RASPUTIN_CHAIN ?? "warmind";
-    const voice = opts.voice ?? process.env.RASPUTIN_VOICE ?? "Tom (Enhanced)";
     const chain = getChain(chainName);
+    // Chain before env: og-warmind is meaningless with an en-US voice, so a chain that names one
+    // must outrank the global default. An explicit per-render voice still wins over both.
+    const voice = opts.voice ?? chain.voice ?? process.env.RASPUTIN_VOICE ?? "Tom (Enhanced)";
     const wpm = opts.wpm ?? Number(process.env.RASPUTIN_RATE ?? chain.wpm);
     const cacheDir = opts.cacheDir ?? process.env.RASPUTIN_CACHE_DIR ?? "cache";
 
