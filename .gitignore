@@ -1,0 +1,23 @@
+node_modules/
+lib/
+.DS_Store
+
+# Local config — copy .env.example → .env. Never commit the real one.
+.env
+
+# Rendered speech + feature timelines, keyed by sha256(text + chainParams).
+# Regenerable from source text; large and churny.
+cache/
+
+# Reference media (Destiny 2 captures). Large, and not ours to redistribute —
+# keep them local. See CLAUDE.md → Voice chain for what they're used for.
+assets/refs/
+
+# Tauri build output (M4).
+src-tauri/target/
+
+# Claude Code local overrides.
+.claude/settings.local.json
+
+# Audition renders — regenerable via `npm run say`.
+samples/

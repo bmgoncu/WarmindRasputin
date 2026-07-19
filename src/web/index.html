@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Rasputin — orb</title>
+<style>
+  /* Near-black, not pure black: the overlay is transparent in production, and a flat black
+     dev backdrop hides whether the orb's darkest tones are actually rendering. */
+  html, body { margin: 0; height: 100%; background: #0a0405; overflow: hidden; }
+  #orb { display: block; width: 100vw; height: 100vh; }
+  #ui {
+    position: fixed; left: 16px; bottom: 16px; display: flex; gap: 12px; align-items: center;
+    font: 12px ui-monospace, monospace; color: #c98a6a; user-select: none;
+  }
+  #ui input { width: 220px; }
+  #ui button { font: inherit; background: #2a1512; color: #e6a883; border: 1px solid #5a2a1e;
+               padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+  #readout { min-width: 3em; }
+</style>
+</head>
+<body>
+  <canvas id="orb"></canvas>
+  <div id="ui">
+    <input id="level" type="range" min="0" max="100" value="0" />
+    <span id="readout">0.00</span>
+    <button id="mode">manual</button>
+  </div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
