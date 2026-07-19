@@ -70,7 +70,15 @@ export class DaemonLink {
         this.ws?.close();
     }
 
-    send(msg: ClientMsg): void {
-        if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+    /**
+     * Returns false when the socket is not open, so callers can tell the user.
+     *
+     * Returning void here silently swallowed every message sent while the daemon was down, and
+     * the speak button looked broken rather than disconnected.
+     */
+    send(msg: ClientMsg): boolean {
+        if (this.ws?.readyState !== WebSocket.OPEN) return false;
+        this.ws.send(JSON.stringify(msg));
+        return true;
     }
 }

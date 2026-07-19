@@ -157,12 +157,18 @@ const sendBtn = document.getElementById("send") as HTMLButtonElement;
 const linkTag = document.getElementById("link") as HTMLElement;
 
 link.onOpen = () => {
-    linkTag.textContent = "connected";
+    linkTag.textContent = "daemon connected";
     linkTag.classList.add("on");
+    linkTag.classList.remove("bad");
+    sendBtn.disabled = false;
 };
 link.onClose = () => {
-    linkTag.textContent = "offline";
+    // Naming the fix in the UI: without the daemon there is nothing to synthesise speech, and the
+    // button previously just did nothing at all.
+    linkTag.textContent = "daemon offline — run: npm run daemon";
     linkTag.classList.remove("on");
+    linkTag.classList.add("bad");
+    sendBtn.disabled = true;
 };
 link.onMessage = (msg) => {
     switch (msg.type) {
@@ -199,8 +205,14 @@ function submit(): void {
     // Any click or keypress counts as the gesture that unlocks audio; without one the context
     // stays suspended, currentTime never advances, and the orb ignores speech entirely.
     void player.unlock();
-    link.send({ type: "say", text, chain: chainSel.value });
-    textInput.value = "";
+    // Only clear on a send that actually left. Clearing unconditionally threw the user's text
+    // away while the daemon was down, so the failure destroyed input as well as being invisible.
+    if (link.send({ type: "say", text, chain: chainSel.value })) {
+        textInput.value = "";
+    } else {
+        linkTag.textContent = "daemon offline — run: npm run daemon";
+        linkTag.classList.add("bad");
+    }
 }
 sendBtn.addEventListener("click", submit);
 textInput.addEventListener("keydown", (e) => {
