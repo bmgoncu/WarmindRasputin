@@ -147,8 +147,27 @@ export class SessionObserver {
         return this.pinned;
     }
 
-    private allowed(sessionId: string): boolean {
+    /**
+     * May this session take focus and drive orb state?
+     *
+     * Only the pin restricts this. In automatic mode ANY session may take focus — that is what
+     * "most recent" means, and gating it on the current focus would freeze it on the first session
+     * seen and never move again.
+     */
+    private accepted(sessionId: string): boolean {
         return this.pinned === null || this.pinned === sessionId;
+    }
+
+    /**
+     * Should this session's words be spoken?
+     *
+     * Stricter than `accepted`: with no pin that means the session in FOCUS, not any session.
+     * Following the registry tails every live session, and narrating them all interleaves four
+     * projects into one voice.
+     */
+    private narratable(sessionId: string): boolean {
+        if (this.pinned !== null) return this.pinned === sessionId;
+        return this.focused === null || this.focused.sessionId === sessionId;
     }
 
     /**
@@ -166,7 +185,7 @@ export class SessionObserver {
         // after their next write.
         if (payload.transcript_path) void this.tailer.follow(payload.transcript_path);
 
-        if (payload.session_id && !this.allowed(payload.session_id)) return;
+        if (payload.session_id && !this.accepted(payload.session_id)) return;
 
         // Most recent activity wins when nothing is pinned. With a global hook every session on
         // the machine reports, and "the one that just did something" is the only sensible reading.
@@ -196,7 +215,10 @@ export class SessionObserver {
         if (!this.enabled) return;
         // Derived from the path rather than read from the line: subagent transcripts carry no
         // session id of their own, and the parent's uuid is in their directory.
-        if (!this.allowed(sessionIdForPath(ev.path))) return;
+        if (!this.narratable(sessionIdForPath(ev.path))) return;
+
+        let latest: string | null = null;
+        let dropped = 0;
 
         for (const line of ev.lines) {
             if (isToolActivity(line)) this.events.pulse(0.45);
@@ -213,8 +235,19 @@ export class SessionObserver {
 
             const text = summarizeForSpeech(raw, SPEAK_MAX_CHARS);
             if (text.length < SPEAK_MIN_CHARS) continue;
-            this.events.say(text);
+            if (latest !== null) dropped++;
+            latest = text;
         }
+
+        // Only the most recent message in a batch is spoken.
+        //
+        // A live session appends a line or two per read, so this changes nothing in normal use.
+        // But any backlog — a slow poll, an adopted session, a burst of output — would otherwise
+        // queue minutes of speech that is already stale by the time it is heard. The newest line
+        // is the only one still worth saying out loud.
+        if (latest === null) return;
+        if (dropped > 0) console.log(`observer: spoke the latest of ${dropped + 1} pending messages`);
+        this.events.say(latest);
     }
 
     /**
@@ -245,7 +278,7 @@ export class SessionObserver {
     }
 
     private onSessionChange(change: SessionChange): void {
-        if (!this.enabled || !this.allowed(change.session.sessionId)) return;
+        if (!this.enabled || !this.accepted(change.session.sessionId)) return;
         this.setFocus(change.session.sessionId, change.session.cwd);
         if (change.to === "busy") {
             this.events.state("thinking");

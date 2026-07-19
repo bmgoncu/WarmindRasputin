@@ -255,12 +255,36 @@ describe("pinning a session", () => {
         expect(focus).toHaveLength(0);
     });
 
-    it("returns to following everything when unpinned", () => {
+    it("returns to automatic when unpinned, following whatever is active", () => {
         const { obs, said } = makeObserver();
         obs.setPinned(S1);
         obs.setPinned(null);
+        // Unpinned does not mean "narrate everything" — it means follow the focused session. S2
+        // becomes focused by being the most recent to report in.
+        obs.handleHook({ session_id: S2, cwd: "/p/two" });
         feedPath(obs, P2, [assistant([{ type: "text", text: "From the second session here." }], "b")]);
-        expect(said).toHaveLength(1);
+        expect(said).toEqual(["From the second session here."]);
+    });
+
+    it("in automatic mode, narrates only the focused session", () => {
+        // The complaint that started this: several sessions interleaved into one voice.
+        const { obs, said } = makeObserver();
+        obs.handleHook({ session_id: S1, cwd: "/p/one" });
+        feedPath(obs, P2, [assistant([{ type: "text", text: "Some other project talking." }], "x")]);
+        feedPath(obs, P1, [assistant([{ type: "text", text: "The focused project talking." }], "y")]);
+        expect(said).toEqual(["The focused project talking."]);
+    });
+
+    it("speaks only the newest message when a batch arrives at once", () => {
+        // A backlog would otherwise queue minutes of speech that is stale before it is heard.
+        const { obs, said } = makeObserver();
+        obs.handleHook({ session_id: S1, cwd: "/p/one" });
+        feedPath(obs, P1, [
+            assistant([{ type: "text", text: "First of several queued messages." }], "a"),
+            assistant([{ type: "text", text: "Second of several queued messages." }], "b"),
+            assistant([{ type: "text", text: "Third and newest queued message." }], "c"),
+        ]);
+        expect(said).toEqual(["Third and newest queued message."]);
     });
 
     it("reports the pin in focus updates", () => {

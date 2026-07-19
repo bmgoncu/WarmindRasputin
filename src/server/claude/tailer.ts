@@ -21,6 +21,16 @@ import { parseLines, type TranscriptLine } from "./transcript.js";
 /** How often to stat followed files. */
 export const POLL_MS = 400;
 
+/**
+ * A newly-discovered subagent transcript is read from the start only if it was written this
+ * recently.
+ *
+ * Older ones are historical. A live session's directory accumulates them for its whole life — 226
+ * were present on this machine, none touched in a day — and adopting a session on daemon start
+ * would otherwise replay every one from the beginning, all at once.
+ */
+export const REPLAY_WINDOW_MS = 30_000;
+
 interface Followed {
     path: string;
     inode: number;
@@ -162,9 +172,17 @@ export class TranscriptTailer {
             for (const name of entries) {
                 if (!name.endsWith(".jsonl")) continue;
                 const full = join(dir, name);
-                // From the start: a subagent file is created when the delegation begins, so its
-                // whole contents are new to us.
-                if (!this.followed.has(full)) await this.follow(full, true);
+                if (this.followed.has(full)) continue;
+                // A subagent file created just now is a delegation starting, and all of it is new
+                // to us. One last written hours ago is history, and replaying it would narrate a
+                // whole past session at once.
+                let fresh = false;
+                try {
+                    fresh = Date.now() - (await stat(full)).mtimeMs < REPLAY_WINDOW_MS;
+                } catch {
+                    // Vanished between readdir and stat; skip it.
+                }
+                await this.follow(full, fresh);
             }
         }
     }

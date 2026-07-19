@@ -134,3 +134,47 @@ describe("path helpers", () => {
         expect(isSubagentPath("/p/x/abc.jsonl")).toBe(false);
     });
 });
+
+describe("subagent replay window", () => {
+    it("reads a freshly created subagent transcript from the start", async () => {
+        const p = join(dir, "sess.jsonl");
+        await writeFile(p, line("start"));
+        const t = new TranscriptTailer();
+        const seen: TailEvent[] = [];
+        t.onLines = (e) => seen.push(e);
+        await t.follow(p);
+        await t.tick();
+
+        const subDir = subagentDirFor(p);
+        await mkdir(subDir, { recursive: true });
+        await writeFile(join(subDir, "agent-new.jsonl"), line("delegated work"));
+        await t.tick();
+        expect(JSON.stringify(seen)).toContain("delegated work");
+    });
+
+    it("does NOT replay an old subagent transcript", async () => {
+        // A live session's directory accumulates these for its whole life — 226 were present on
+        // this machine, none touched in a day. Adopting a session on daemon start replayed every
+        // one from the beginning, all at once.
+        const p = join(dir, "sess.jsonl");
+        await writeFile(p, line("start"));
+        const subDir = subagentDirFor(p);
+        await mkdir(subDir, { recursive: true });
+        const old = join(subDir, "agent-old.jsonl");
+        await writeFile(old, line("ancient history"));
+        const longAgo = new Date(Date.now() - 60 * 60 * 1000);
+        await utimes(old, longAgo, longAgo);
+
+        const t = new TranscriptTailer();
+        const seen: TailEvent[] = [];
+        t.onLines = (e) => seen.push(e);
+        await t.follow(p);
+        await t.tick();
+        expect(JSON.stringify(seen)).not.toContain("ancient history");
+
+        // It is still followed, so anything appended from now on is heard.
+        await appendFile(old, line("new delegation output"));
+        await t.tick();
+        expect(JSON.stringify(seen)).toContain("new delegation output");
+    });
+});

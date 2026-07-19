@@ -207,6 +207,16 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
   both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
   Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
+- **Never adopt an existing transcript from offset 0.** A live session's directory accumulates
+  subagent transcripts for its whole life — 226 on this machine, none touched in a day — so
+  following them from the start replays entire past sessions at once. Only a file written within
+  `REPLAY_WINDOW_MS` is read from the beginning; everything else starts at EOF.
+- **Narrating "all sessions" is never what anyone means.** With the registry followed, every live
+  session is tailed; speaking them all interleaves four projects into one voice. Automatic mode
+  narrates the FOCUSED session only. Note focus eligibility and narration eligibility are separate
+  questions — gating hook events on the current focus freezes it on the first session forever.
+- **Speak only the newest message in a batch.** A backlog queues minutes of speech that is stale
+  before it is heard.
 - **Do not style overlay UI with an injected `<style>` element — use CSSOM.** `<style>` blocks are
   governed by `style-src`, and Tauri rewrites the app CSP with nonces; a nonce makes browsers
   ignore `'unsafe-inline'`, so the block is dropped silently. An unstyled subtitle is a static
