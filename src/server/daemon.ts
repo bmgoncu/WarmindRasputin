@@ -26,6 +26,7 @@ import { synthesize } from "./voice/synth.js";
 import { extractTimeline, toWire } from "./audio/timeline.js";
 import { getChain } from "./voice/chains.js";
 import { translate } from "./voice/translate.js";
+import { SessionObserver, type HookPayload } from "./claude/observer.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -167,6 +168,25 @@ export async function speak(text: string, chain = "measured"): Promise<SpeakMsg>
     return msg;
 }
 
+/**
+ * Observes any Claude session that reports in.
+ *
+ * Speech is queued rather than fired in parallel: several sessions can finish at once, and
+ * overlapping utterances are unintelligible. `speak` broadcasts and returns as soon as the audio
+ * is rendered, so this serialises synthesis, not playback.
+ */
+let speaking = Promise.resolve();
+const observer = new SessionObserver({
+    say: (text) => {
+        speaking = speaking
+            .then(() => speak(text, config.chain))
+            .then(() => undefined)
+            .catch((e) => console.error("observer speak failed:", e));
+    },
+    pulse: (strength) => broadcast({ type: "pulse", strength }),
+    state: (state) => broadcast({ type: "state", state }),
+});
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
 
@@ -204,6 +224,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
             res.writeHead(500, { "content-type": "application/json" });
             res.end(JSON.stringify({ error: String(err) }));
         }
+        return;
+    }
+
+    if (url.pathname === "/event" && req.method === "POST") {
+        // Answered immediately and unconditionally. The hook is configured `async: true`, but a
+        // slow or failing endpoint here must never be able to stall someone's Claude session.
+        res.writeHead(204).end();
+        try {
+            const payload = JSON.parse((await readBody(req)) || "{}") as HookPayload;
+            observer.handleHook(payload);
+        } catch (err) {
+            console.warn("bad hook payload:", String(err));
+        }
+        return;
+    }
+
+    if (url.pathname === "/observed" && req.method === "GET") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ watching: observer.watching }));
         return;
     }
 
@@ -281,6 +320,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
     });
 
     void loadConfig();
+    observer.start();
 
     // Started by the overlay: exit when its stdin pipe closes.
     //

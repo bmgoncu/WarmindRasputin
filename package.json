@@ -24,7 +24,9 @@
     "orb:build": "vite build",
     "overlay": "./scripts/with-rust.sh tauri dev",
     "overlay:build": "./scripts/with-rust.sh tauri build",
-    "daemon": "tsx watch src/server/daemon.ts"
+    "daemon": "tsx watch src/server/daemon.ts",
+    "hook:install": "tsx src/server/claude/install-hook.ts",
+    "hook:remove": "tsx src/server/claude/install-hook.ts --remove"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.11.1",
