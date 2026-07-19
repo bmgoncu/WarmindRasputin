@@ -35,6 +35,7 @@ Full design and milestones: `~/.claude/plans/cosmic-bouncing-clarke.md`.
 | Screenshot the orb | `npx tsx tools/shoot.ts <level> <out.png>` |
 | Isolate one animated system | `ORB_FREEZE=1` (stop drift/spin/pulses) · `ORB_SOLO=1` (jolts alone) |
 | Tests | `npm test` |
+| Typecheck both halves | `npm run typecheck` |
 | Typecheck / build | `npm run build` |
 
 ## Architecture
@@ -186,6 +187,10 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 - **`loudnorm` is load-bearing.** `say` loudness varies per utterance; without it the orb's
   response amplitude would depend on sentence length.
 - **`antialias: true` is a no-op through `EffectComposer`** — use a `{ samples: 4 }` render target.
+- **`npm run build` (plain `tsc`) does NOT check the renderer.** The root tsconfig excludes
+  `src/web`, and Vite transpiles without typechecking, so renderer type errors are invisible to
+  both — a `private` field was being read from `main.ts` for hours under a clean `tsc --noEmit`.
+  Use `npm run typecheck`, which runs the root config and `tsconfig.web.json`.
 - **The idle floor hides dead test signals.** With `idleFloor` at 0.22 a stretch where the driver
   outputs nothing is pixel-identical to manual idle, so a broken envelope reads as a broken button
   instead. The harness's simulated speech had an 11-second silence for exactly this reason —

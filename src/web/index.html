@@ -13,6 +13,8 @@
     font: 12px ui-monospace, monospace; color: #c98a6a; user-select: none;
   }
   #ui input { width: 220px; }
+  #ui #shake { width: 110px; }
+  #ui label { display: flex; gap: 6px; align-items: center; }
   #ui button { font: inherit; background: #2a1512; color: #e6a883; border: 1px solid #5a2a1e;
                padding: 4px 10px; border-radius: 3px; cursor: pointer; }
   #readout { min-width: 3em; }
@@ -25,6 +27,8 @@
     <span id="readout">0.00</span>
     <button id="mode">manual</button>
     <button id="floor">floor 0.22</button>
+    <label>shake <input id="shake" type="range" min="0" max="200" value="100" /></label>
+    <span id="shakeout">1.00x</span>
   </div>
   <script type="module" src="./main.ts"></script>
 </body>

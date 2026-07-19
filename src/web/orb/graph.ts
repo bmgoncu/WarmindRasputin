@@ -234,6 +234,7 @@ export class NodeGraph {
     private readonly jitter: Float32Array;
     /** Fixed per-axis phases so each node vibrates independently rather than the graph pulsing. */
     private readonly shakePhase: Float32Array;
+    private jitterFloor = 0;
     private sinceRebuild = 0;
 
     private readonly lines: THREE.LineSegments;
@@ -571,6 +572,16 @@ export class NodeGraph {
         }
     }
 
+    /** Live tuning — see the shake slider in the dev harness. */
+    setSpeechJitter(v: number): void {
+        this.opts.speechJitter = v;
+    }
+
+    /** Level below which there is no shake at all — normally the orb's idle floor. */
+    setJitterFloor(v: number): void {
+        this.jitterFloor = Math.min(0.95, Math.max(0, v));
+    }
+
     /**
      * Adds speech-driven vibration on top of whatever the jolts contributed.
      *
@@ -579,17 +590,20 @@ export class NodeGraph {
      * different on different monitors. Two octaves, because a single sine reads as a smooth
      * wobble rather than as a driven structure.
      *
-     * level^1.8 keeps idle still — at the 0.22 floor the shake is ~6% of its full value, so it
-     * only arrives with actual speech energy.
+     * Drive is measured ABOVE the idle floor, not from zero. Curving raw level leaves a residue at
+     * rest — with the floor holding level at 0.22, level^1.8 is still 0.058, so the orb buzzed
+     * permanently in idle and in manual mode. Rescaling from the floor makes rest exactly zero.
      */
     private applySpeechJitter(t: number, level: number): void {
         const o = this.opts;
-        if (o.speechJitter <= 0 || level < 0.02) return;
-        const amp = o.speechJitter * o.radius * level ** 1.8;
+        if (o.speechJitter <= 0) return;
+        const drive = (level - this.jitterFloor) / (1 - this.jitterFloor);
+        if (drive <= 0.01) return;
+        const amp = o.speechJitter * o.radius * drive ** 1.8;
         const n = o.nodeCount;
         for (let i = 0; i < n * 3; i++) {
             const ph = this.shakePhase[i];
-            this.jitter[i] += (Math.sin(t * 44 + ph) * 0.65 + Math.sin(t * 107 + ph * 2.3) * 0.35) * amp;
+            this.jitter[i] += (Math.sin(t * 44 + ph) * 0.75 + Math.sin(t * 107 + ph * 2.3) * 0.25) * amp;
         }
     }
 

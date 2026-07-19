@@ -18,6 +18,12 @@
 import * as THREE from "three";
 import { NodeGraph, type Pulse } from "./graph.js";
 
+// Base shake amplitudes, as a fraction of each graph's radius. The harness slider scales both,
+// so they stay in proportion — the outer lattice is the one you actually read, and matching the
+// inner graph to it makes the core boil.
+const SHAKE_INNER = 0.009;
+const SHAKE_OUTER = 0.013;
+
 const COL_IDLE = new THREE.Color(0xff5410);
 const COL_MID = new THREE.Color(0xff8a30);
 const COL_HOT = new THREE.Color(0xffa53a);
@@ -39,7 +45,12 @@ export class Orb {
     private nextPulse = 0.6;
     private frozen = false;
 
-    private level = 0;
+    private _level = 0;
+
+    /** Smoothed VU level, after ballistics and the idle floor. Read-only to callers. */
+    get level(): number {
+        return this._level;
+    }
     private readonly warm = new THREE.Color();
 
     constructor() {
@@ -160,7 +171,7 @@ export class Orb {
             pushScale: 0.05,
             joltInterval: 0,
             maxJolts: 0,
-            speechJitter: 0.022,
+            speechJitter: SHAKE_INNER,
             colour: 0xffb070,
             seed: 4242,
         });
@@ -190,7 +201,7 @@ export class Orb {
             // Electric jolts walk the outer shell only.
             joltInterval: 1.6,
             maxJolts: 3,
-            speechJitter: 0.034,
+            speechJitter: SHAKE_OUTER,
             colour: 0xff5f26,
             seed: 90210,
         });
@@ -252,9 +263,18 @@ export class Orb {
         );
 
         this.group.add(this.haze, this.core, this.rays, this.inner.group, this.shell, this.outer.group, this.streaks);
+
+        // Field initializers ran before the graphs existed, so push the starting floor now.
+        this.idleFloor = this._idleFloor;
     }
 
     /** Live state for the dev harness. */
+    /** Scales both graphs' shake, 0-2x of the tuned base. Dev harness slider. */
+    setShakeScale(k: number): void {
+        this.inner.setSpeechJitter(SHAKE_INNER * k);
+        this.outer.setSpeechJitter(SHAKE_OUTER * k);
+    }
+
     /** Dev only — draws only the jolt segments, against black. See NodeGraph.solo. */
     solo(): void {
         this.freeze();
@@ -276,7 +296,7 @@ export class Orb {
     }
 
     get debug(): Record<string, unknown> {
-        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this.level, idleFloor: this.idleFloor };
+        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this._level, idleFloor: this._idleFloor };
     }
 
     /**
@@ -286,17 +306,28 @@ export class Orb {
      * the lattice goes nearly invisible, so idle looks like a fault rather than like a machine
      * waiting. 0.22 is the level where both are legible while still sitting clearly below speech.
      */
-    idleFloor = 0.22;
+    private _idleFloor = 0.22;
+
+    get idleFloor(): number {
+        return this._idleFloor;
+    }
+
+    set idleFloor(v: number) {
+        this._idleFloor = v;
+        // The shake is measured above this, so the two must not drift apart.
+        this.inner.setJitterFloor(v);
+        this.outer.setJitterFloor(v);
+    }
 
     /** VU ballistics — fast attack, slow release, frame-rate independent. */
     setLevel(target: number, dt: number): void {
-        target = Math.max(target, this.idleFloor);
-        const tau = (target > this.level ? 30 : 220) / 1000;
-        this.level += (target - this.level) * (1 - Math.exp(-dt / tau));
+        target = Math.max(target, this._idleFloor);
+        const tau = (target > this._level ? 30 : 220) / 1000;
+        this._level += (target - this._level) * (1 - Math.exp(-dt / tau));
     }
 
     update(dt: number, t: number): void {
-        const L = this.level;
+        const L = this._level;
         this.updatePulses(dt, L);
 
         this.warm.copy(COL_IDLE).lerp(COL_MID, Math.min(1, L * 1.8));

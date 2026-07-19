@@ -1,0 +1,20 @@
+// Typecheck for the renderer.
+//
+// The root tsconfig excludes src/web because the two halves need different module resolution:
+// the daemon is NodeNext and emits to lib/, the renderer is bundler-resolved and emits nothing.
+// That exclusion meant the renderer — the most heavily edited code in the project — was never
+// typechecked at all, since Vite transpiles without checking types. `npm run typecheck` runs both.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "lib": ["es2023", "DOM", "DOM.Iterable"],
+    "allowImportingTsExtensions": true,
+    // rootDir from the base config is src/, but tools/ sits outside it. Nothing is emitted here.
+    "rootDir": "."
+  },
+  "include": ["src/web", "tools"],
+  "exclude": []
+}
