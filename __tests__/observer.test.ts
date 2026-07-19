@@ -4,13 +4,16 @@ function makeObserver() {
     const said: string[] = [];
     const pulses: number[] = [];
     const states: string[] = [];
-    const focus: { project?: string; sessions: number }[] = [];
+    const focus: { project?: string; sessions: number; pinned?: boolean }[] = [];
     const obs = new SessionObserver({
         say: (t) => said.push(t),
         pulse: (s) => pulses.push(s),
         state: (s) => states.push(s),
         focus: (f) => focus.push(f),
     });
+    // Narration is off by default — see the `enabled` field. Every test below is about what
+    // happens once the user has opted in.
+    obs.setEnabled(true);
     return { obs, said, pulses, states, focus };
 }
 
@@ -22,6 +25,41 @@ const feed = (obs: SessionObserver, lines: unknown[]): void =>
 
 const assistant = (content: unknown, id = "m1") => ({
     type: "assistant", message: { id, role: "assistant", content },
+});
+
+describe("opt-in", () => {
+    it("narrates nothing until enabled", () => {
+        // Following the session registry means narration would otherwise start the moment the
+        // daemon does — every session on the machine, with no opt-in.
+        const said: string[] = [];
+        const states: string[] = [];
+        const obs = new SessionObserver({
+            say: (t) => said.push(t),
+            pulse: () => undefined,
+            state: (s) => states.push(s),
+            focus: () => undefined,
+        });
+        obs.handleHook({ hook_event_name: "UserPromptSubmit", session_id: "s1", cwd: "/p/x" });
+        (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({
+            path: "/p/x/aaaa.jsonl", subagent: false,
+            lines: [{ type: "assistant", message: { id: "m", role: "assistant", content: [{ type: "text", text: "Should stay silent." }] } }],
+        });
+        expect(said).toEqual([]);
+        expect(states).toEqual([]);
+        expect(obs.isEnabled).toBe(false);
+    });
+
+    it("stops following when disabled, so nothing is polled for nothing", async () => {
+        const obs = new SessionObserver({
+            say: () => undefined, pulse: () => undefined, state: () => undefined, focus: () => undefined,
+        });
+        obs.setEnabled(true);
+        obs.handleHook({ session_id: "s1", transcript_path: "/tmp/x/abc.jsonl" });
+        await new Promise((r) => setTimeout(r, 10));
+        expect(obs.watching.length).toBeGreaterThan(0);
+        obs.setEnabled(false);
+        expect(obs.watching).toEqual([]);
+    });
 });
 
 describe("hook events", () => {
@@ -171,5 +209,64 @@ describe("focus", () => {
         const { obs, focus } = makeObserver();
         obs.handleHook({ session_id: "s1" });
         expect(focus[0].project).toBeUndefined();
+    });
+});
+
+describe("pinning a session", () => {
+    const feedPath = (obs: SessionObserver, path: string, lines: unknown[]): void =>
+        (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({ path, subagent: false, lines });
+
+    const P1 = "/p/proj/aaaaaaaa-1111-2222-3333-444444444444.jsonl";
+    const P2 = "/p/proj/bbbbbbbb-1111-2222-3333-444444444444.jsonl";
+    const S1 = "aaaaaaaa-1111-2222-3333-444444444444";
+    const S2 = "bbbbbbbb-1111-2222-3333-444444444444";
+
+    it("narrates every session when nothing is pinned", () => {
+        const { obs, said } = makeObserver();
+        feedPath(obs, P1, [assistant([{ type: "text", text: "From the first session here." }], "a")]);
+        feedPath(obs, P2, [assistant([{ type: "text", text: "From the second session here." }], "b")]);
+        expect(said).toHaveLength(2);
+    });
+
+    it("narrates only the pinned session", () => {
+        const { obs, said } = makeObserver();
+        obs.setPinned(S1);
+        feedPath(obs, P1, [assistant([{ type: "text", text: "From the first session here." }], "a")]);
+        feedPath(obs, P2, [assistant([{ type: "text", text: "From the second session here." }], "b")]);
+        expect(said).toEqual(["From the first session here."]);
+    });
+
+    it("includes the pinned session's subagents", () => {
+        // Subagent transcripts carry no session id of their own; theirs is the parent directory.
+        const { obs, said } = makeObserver();
+        obs.setPinned(S1);
+        feedPath(obs, `/p/proj/${S1}/subagents/agent-xyz.jsonl`, [
+            assistant([{ type: "text", text: "Delegated work reporting back." }], "c"),
+        ]);
+        expect(said).toHaveLength(1);
+    });
+
+    it("ignores hook events from other sessions while pinned", () => {
+        const { obs, states, focus } = makeObserver();
+        obs.setPinned(S1);
+        focus.length = 0;
+        obs.handleHook({ hook_event_name: "UserPromptSubmit", session_id: S2, cwd: "/p/other" });
+        expect(states).toEqual([]);
+        expect(focus).toHaveLength(0);
+    });
+
+    it("returns to following everything when unpinned", () => {
+        const { obs, said } = makeObserver();
+        obs.setPinned(S1);
+        obs.setPinned(null);
+        feedPath(obs, P2, [assistant([{ type: "text", text: "From the second session here." }], "b")]);
+        expect(said).toHaveLength(1);
+    });
+
+    it("reports the pin in focus updates", () => {
+        const { obs, focus } = makeObserver();
+        obs.handleHook({ session_id: S1, cwd: "/p/proj" });
+        obs.setPinned(S1);
+        expect(focus.at(-1)?.pinned).toBe(true);
     });
 });

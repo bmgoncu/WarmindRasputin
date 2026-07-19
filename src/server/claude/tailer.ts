@@ -178,3 +178,22 @@ export function subagentDirFor(transcriptPath: string): string {
 export function isSubagentPath(path: string): boolean {
     return path.includes("/subagents/");
 }
+
+/**
+ * Session id for a transcript path.
+ *
+ * The transcript filename IS the session uuid — verified against the live registry, where all 11
+ * session ids matched a transcript filename exactly. Subagent transcripts sit at
+ * `<uuid>/subagents/agent-<id>.jsonl`, so their session is the grandparent directory.
+ *
+ * Deriving this is what makes it possible to narrate one session and ignore the rest: the tailer
+ * deals in paths, while the user picks a session.
+ */
+export function sessionIdForPath(path: string): string {
+    if (isSubagentPath(path)) {
+        const parts = path.split("/");
+        const i = parts.lastIndexOf("subagents");
+        return i > 0 ? parts[i - 1] : "";
+    }
+    return basename(path).replace(/\.jsonl$/, "");
+}

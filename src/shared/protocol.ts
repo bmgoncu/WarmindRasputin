@@ -89,6 +89,13 @@ export interface OrbConfig {
     subtitles?: boolean;
     /** Delivery mode used when the daemon speaks without being told one. */
     chain?: string;
+    /**
+     * Session to narrate, or null/undefined to follow whichever was most recently active.
+     *
+     * Persisted, so a chosen session survives a daemon restart — it is a deliberate decision, not
+     * a transient view state.
+     */
+    focusSessionId?: string | null;
 }
 
 export interface ConfigMsg extends OrbConfig {
@@ -110,6 +117,8 @@ export interface FocusMsg {
     sessionId?: string;
     /** How many live sessions are reporting, so several can be distinguished from one. */
     sessions: number;
+    /** True when the user pinned this session rather than it being the most recently active. */
+    pinned?: boolean;
     /** Where dictation would go. Undefined until voice input exists (M6). */
     dictateTo?: string;
 }

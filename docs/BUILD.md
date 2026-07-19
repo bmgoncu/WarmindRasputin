@@ -309,6 +309,15 @@ held to a higher bar than the rest of the project:
   file byte for byte, with other hooks and unrelated settings intact.
 - Status is all-or-nothing: a partial install reads as "not installed", so pressing Install repairs
   it instead of reporting success while half the events are missing.
+- **The installed hook is also the consent record.** Narration is gated on it, because the daemon
+  finds live transcripts from the session registry on its own and would otherwise start narrating
+  every session on the machine the moment it launched — with no opt-in anywhere.
+- **Transcripts are followed from the registry, not only from hook events.** `follow()` starts at
+  the current end of file and the daemon restarts on every edit under `tsx watch`, so after a
+  restart nothing would be followed until the next hook fired — by which point the assistant text
+  written in between has already been appended and is skipped. `findTranscript` locates a session's
+  file by scanning for `<sessionId>.jsonl`, which is exact, rather than reversing the lossy
+  project-path encoding.
 
 ## 8. Operational notes
 

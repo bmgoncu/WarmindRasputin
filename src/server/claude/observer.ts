@@ -15,8 +15,8 @@
  * transcript.
  */
 
-import { TranscriptTailer, type TailEvent } from "./tailer.js";
-import { SessionWatcher, type SessionChange } from "./sessions.js";
+import { sessionIdForPath, TranscriptTailer, type TailEvent } from "./tailer.js";
+import { findTranscript, SessionWatcher, type SessionChange, type SessionEntry } from "./sessions.js";
 import { isToolActivity, speakableText, summarizeForSpeech } from "./transcript.js";
 
 /** The subset of a hook payload we rely on. Claude Code sends more; none of it is required. */
@@ -34,6 +34,8 @@ export interface FocusInfo {
     cwd?: string;
     sessionId?: string;
     sessions: number;
+    /** True when the user chose this session rather than it being the most recently active. */
+    pinned?: boolean;
 }
 
 export interface ObserverEvents {
@@ -66,14 +68,31 @@ export class SessionObserver {
     /** Guards against speaking the same block twice when a line is re-read. */
     private readonly spoken = new Set<string>();
     /** The session we are attached to — the most recent one to show activity. */
-    private focused: { sessionId: string; cwd?: string } | null = null;
+    private focused: { sessionId: string; cwd?: string; pinned: boolean } | null = null;
     private liveCount = 0;
+    /**
+     * Session the user pinned, or null to follow whichever was most recently active.
+     *
+     * When pinned, everything else is ignored outright — the point of choosing a session is not
+     * hearing the other four.
+     */
+    private pinned: string | null = null;
+    /**
+     * Whether to narrate at all.
+     *
+     * Off by default and deliberately so. Following the session registry means narration would
+     * otherwise begin the moment the daemon starts — every Claude session on the machine, with no
+     * opt-in — which is not something software should decide for someone. The Preferences switch
+     * is the opt-in, and it also installs the hook.
+     */
+    private enabled = false;
 
     constructor(private readonly events: ObserverEvents) {
         this.tailer.onLines = (ev) => this.onTranscript(ev);
         this.sessions.onChange = (change) => this.onSessionChange(change);
-        this.sessions.onCount = (n) => {
-            this.liveCount = n;
+        this.sessions.onPoll = (entries) => {
+            this.liveCount = entries.length;
+            void this.followLiveSessions(entries);
         };
     }
 
@@ -92,19 +111,66 @@ export class SessionObserver {
     }
 
     /**
+     * Follows the transcript of every live session.
+     *
+     * Hook events alone are not enough. `follow()` starts at the CURRENT end of file, and the
+     * daemon restarts — under `tsx watch`, on every edit — so after a restart nothing is followed
+     * until the next hook fires, by which time the assistant text written in between has already
+     * been appended and is skipped. Polling the registry means narration resumes on its own.
+     */
+    private async followLiveSessions(entries: SessionEntry[]): Promise<void> {
+        if (!this.enabled) return;
+        for (const entry of entries) {
+            if (entry.cwd) this.cwdBySession.set(entry.sessionId, entry.cwd);
+            const path = await findTranscript(entry.sessionId);
+            if (path) await this.tailer.follow(path);
+        }
+    }
+
+    /** Turns narration on or off. Off also stops following, so nothing is polled for nothing. */
+    setEnabled(on: boolean): void {
+        this.enabled = on;
+        if (!on) for (const path of this.tailer.watching) this.tailer.unfollow(path);
+    }
+
+    get isEnabled(): boolean {
+        return this.enabled;
+    }
+
+    /** Pins narration to one session, or null for automatic. */
+    setPinned(sessionId: string | null): void {
+        this.pinned = sessionId;
+        if (sessionId) this.setFocus(sessionId, this.cwdBySession.get(sessionId));
+    }
+
+    get pinnedSession(): string | null {
+        return this.pinned;
+    }
+
+    private allowed(sessionId: string): boolean {
+        return this.pinned === null || this.pinned === sessionId;
+    }
+
+    /**
      * Handles one hook event.
      *
      * Unknown event names are ignored rather than rejected: Claude Code gains hook types over time,
      * and an observer that errors on one it does not recognise would break on an upgrade.
      */
     handleHook(payload: HookPayload): void {
+        if (!this.enabled) return;
         if (payload.session_id && payload.cwd) this.cwdBySession.set(payload.session_id, payload.cwd);
-        // Most recent activity wins. With a global hook every session on the machine reports, and
-        // "the one that just did something" is the only sensible reading of which is in focus.
-        if (payload.session_id) this.setFocus(payload.session_id, payload.cwd);
 
-        // Always start following, whatever the event was. The path only ever arrives this way.
+        // Follow regardless of the pin: a pinned session can be changed at any moment, and having
+        // already been tailing the others means the switch takes effect immediately rather than
+        // after their next write.
         if (payload.transcript_path) void this.tailer.follow(payload.transcript_path);
+
+        if (payload.session_id && !this.allowed(payload.session_id)) return;
+
+        // Most recent activity wins when nothing is pinned. With a global hook every session on
+        // the machine reports, and "the one that just did something" is the only sensible reading.
+        if (payload.session_id) this.setFocus(payload.session_id, payload.cwd);
 
         switch (payload.hook_event_name) {
             case "UserPromptSubmit":
@@ -127,6 +193,11 @@ export class SessionObserver {
     }
 
     private onTranscript(ev: TailEvent): void {
+        if (!this.enabled) return;
+        // Derived from the path rather than read from the line: subagent transcripts carry no
+        // session id of their own, and the parent's uuid is in their directory.
+        if (!this.allowed(sessionIdForPath(ev.path))) return;
+
         for (const line of ev.lines) {
             if (isToolActivity(line)) this.events.pulse(0.45);
 
@@ -146,20 +217,35 @@ export class SessionObserver {
         }
     }
 
-    /** Announces the attached session, but only when it actually changes. */
+    /**
+     * Announces the attached session, but only when something actually changes.
+     *
+     * The pin is part of that comparison: pinning the session already in focus changes nothing
+     * about WHICH session it is, but it does change what the label should say, and leaving it out
+     * meant choosing the current session appeared to do nothing.
+     */
     private setFocus(sessionId: string, cwd?: string): void {
         const resolved = cwd ?? this.cwdBySession.get(sessionId);
-        if (this.focused?.sessionId === sessionId && this.focused.cwd === resolved) return;
-        this.focused = { sessionId, cwd: resolved };
+        const pinned = this.pinned !== null;
+        if (
+            this.focused?.sessionId === sessionId &&
+            this.focused.cwd === resolved &&
+            this.focused.pinned === pinned
+        ) {
+            return;
+        }
+        this.focused = { sessionId, cwd: resolved, pinned };
         this.events.focus({
             sessionId,
             cwd: resolved,
             project: resolved ? resolved.split("/").filter(Boolean).pop() : undefined,
             sessions: this.liveCount,
+            pinned,
         });
     }
 
     private onSessionChange(change: SessionChange): void {
+        if (!this.enabled || !this.allowed(change.session.sessionId)) return;
         this.setFocus(change.session.sessionId, change.session.cwd);
         if (change.to === "busy") {
             this.events.state("thinking");

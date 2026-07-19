@@ -14,11 +14,37 @@
  * pid is gone must not be reported as still working.
  */
 
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const SESSIONS_DIR = join(homedir(), ".claude", "sessions");
+export const PROJECTS_DIR = join(homedir(), ".claude", "projects");
+
+/**
+ * Finds a session's transcript without reversing the project-path encoding.
+ *
+ * That encoding is LOSSY — both `/` and `_` become `-`, so `merge-mogul_2` and `merge-mogul-2`
+ * collide and a cwd cannot be turned back into a directory name. But the transcript FILENAME is
+ * the session uuid, so scanning the project directories for `<sessionId>.jsonl` is exact.
+ */
+export async function findTranscript(sessionId: string, projectsDir = PROJECTS_DIR): Promise<string | null> {
+    let dirs: string[];
+    try {
+        dirs = await readdir(projectsDir);
+    } catch {
+        return null;
+    }
+    for (const dir of dirs) {
+        const candidate = join(projectsDir, dir, `${sessionId}.jsonl`);
+        try {
+            if ((await stat(candidate)).isFile()) return candidate;
+        } catch {
+            // Not in this project directory.
+        }
+    }
+    return null;
+}
 
 export interface SessionEntry {
     pid: number;
@@ -85,8 +111,8 @@ export class SessionWatcher {
     private primed = false;
 
     onChange: ((change: SessionChange) => void) | null = null;
-    /** Live session count each poll — reported even when no status changed. */
-    onCount: ((n: number) => void) | null = null;
+    /** Every live session each poll, reported even when nothing changed. */
+    onPoll: ((entries: SessionEntry[]) => void) | null = null;
 
     constructor(
         private readonly dir = SESSIONS_DIR,
@@ -108,7 +134,7 @@ export class SessionWatcher {
     /** One poll pass. Exposed so tests can drive it rather than wait on a timer. */
     async tick(): Promise<void> {
         const live = await readSessions(this.dir);
-        this.onCount?.(live.length);
+        this.onPoll?.(live);
         const seen = new Set<string>();
 
         for (const entry of live) {

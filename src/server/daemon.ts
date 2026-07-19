@@ -28,6 +28,7 @@ import { getChain } from "./voice/chains.js";
 import { translate } from "./voice/translate.js";
 import { SessionObserver, type HookPayload } from "./claude/observer.js";
 import { hookState, setHook } from "./claude/install-hook.js";
+import { readSessions } from "./claude/sessions.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -265,6 +266,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
                 const body = JSON.parse((await readBody(req)) || "{}") as { enabled?: boolean };
                 const result = await setHook(body.enabled === true);
                 const state = await hookState();
+                // One switch, one meaning: the hook and narration are the same decision. Leaving
+                // them separate would let the daemon narrate with no hook installed, which is
+                // exactly the surprise this gate exists to prevent.
+                observer.setEnabled(state.installed);
                 if (result.changed) {
                     console.log(`hook ${state.installed ? "installed" : "removed"}${result.backup ? ` (backup: ${result.backup})` : ""}`);
                 }
@@ -276,6 +281,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
             }
             return;
         }
+    }
+
+    if (url.pathname === "/sessions" && req.method === "GET") {
+        const live = await readSessions();
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+            JSON.stringify({
+                enabled: observer.isEnabled,
+                pinned: observer.pinnedSession,
+                sessions: live.map((entry) => ({
+                    sessionId: entry.sessionId,
+                    cwd: entry.cwd,
+                    project: entry.cwd?.split("/").filter(Boolean).pop(),
+                    status: entry.status,
+                    pid: entry.pid,
+                })),
+            }),
+        );
+        return;
     }
 
     if (url.pathname === "/observed" && req.method === "GET") {
@@ -339,6 +363,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                 case "set-config": {
                     const { type: _ignored, ...patch } = parsed;
                     config = { ...config, ...patch };
+                    if ("focusSessionId" in patch) observer.setPinned(patch.focusSessionId ?? null);
                     void saveConfig();
                     // Back to EVERY renderer including the sender, so the overlay follows the
                     // preferences window and a second preferences window cannot drift.
@@ -358,7 +383,12 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
         });
     });
 
-    void loadConfig();
+    void loadConfig().then(() => observer.setPinned(config.focusSessionId ?? null));
+    // The installed hook is the record of consent, so it decides whether narration runs.
+    void hookState().then((state) => {
+        observer.setEnabled(state.installed);
+        if (state.installed) console.log("narration on — hook is installed");
+    });
     observer.start();
 
     // Started by the overlay: exit when its stdin pipe closes.

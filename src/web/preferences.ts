@@ -240,6 +240,75 @@ narrate.addEventListener("change", async () => {
 });
 void refreshHook();
 
+// --- which session to listen to ------------------------------------------------------------
+const focusSel = $<HTMLSelectElement>("focus");
+const focusHint = $<HTMLElement>("focushint");
+
+interface LiveSession {
+    sessionId: string;
+    cwd?: string;
+    project?: string;
+    status: string;
+    pid: number;
+}
+
+/**
+ * Rebuilds the session list.
+ *
+ * Rebuilt wholesale rather than diffed, but only when the set actually changed — replacing the
+ * options every second would close the dropdown under the user's cursor mid-click.
+ */
+let lastSessionKey = "";
+async function refreshSessions(): Promise<void> {
+    let data: { pinned: string | null; sessions: LiveSession[] };
+    try {
+        data = await (await fetch(`${DAEMON_ORIGIN}/sessions`)).json();
+    } catch {
+        focusSel.disabled = true;
+        focusHint.textContent = "daemon offline";
+        return;
+    }
+    focusSel.disabled = false;
+
+    const key = JSON.stringify([data.pinned, data.sessions.map((s) => [s.sessionId, s.status])]);
+    if (key === lastSessionKey) return;
+    lastSessionKey = key;
+
+    const wanted = data.pinned ?? "";
+    focusSel.innerHTML = "";
+    const auto = document.createElement("option");
+    auto.value = "";
+    auto.textContent = `Most recent session (${data.sessions.length} live)`;
+    focusSel.appendChild(auto);
+
+    for (const s of data.sessions) {
+        const opt = document.createElement("option");
+        opt.value = s.sessionId;
+        opt.textContent = `${s.project ?? s.cwd ?? s.sessionId.slice(0, 8)} — ${s.status}`;
+        focusSel.appendChild(opt);
+    }
+    // A pinned session that is no longer running still needs an entry, or the dropdown would
+    // silently snap back to automatic and misrepresent what the daemon is doing.
+    if (wanted && !data.sessions.some((s) => s.sessionId === wanted)) {
+        const opt = document.createElement("option");
+        opt.value = wanted;
+        opt.textContent = `${wanted.slice(0, 8)} — not running`;
+        focusSel.appendChild(opt);
+    }
+    focusSel.value = wanted;
+    focusHint.textContent = wanted
+        ? "Only this session is narrated. Others are ignored until you change this."
+        : "Follows whichever session was most recently active.";
+}
+
+focusSel.addEventListener("change", () => {
+    push({ focusSessionId: focusSel.value || null });
+    lastSessionKey = "";
+    void refreshSessions();
+});
+void refreshSessions();
+setInterval(() => void refreshSessions(), 2000);
+
 const autostart = $<HTMLInputElement>("autostart");
 async function refreshAutostart(): Promise<void> {
     const bridge = tauri();
