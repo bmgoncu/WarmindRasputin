@@ -32,6 +32,8 @@ Full design and milestones: `~/.claude/plans/cosmic-bouncing-clarke.md`.
 | A/B chain variants vs. the reference | `npm run audition -- "some line"` |
 | Derive the firequalizer curve from refs | `npm run analyze-ref` |
 | Run the daemon | `npm run daemon` |
+| Screenshot the orb | `npx tsx tools/shoot.ts <level> <out.png>` |
+| Isolate one animated system | `ORB_FREEZE=1` (stop drift/spin/pulses) · `ORB_SOLO=1` (jolts alone) |
 | Tests | `npm test` |
 | Typecheck / build | `npm run build` |
 
@@ -141,7 +143,7 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 - **Speech policy: speak assistant `text` blocks, never `tool_use` blocks.** No spoken "Read(…)"
   or "Grep(…)". This is a filter on block `type`, not string-matching. Tool activity shows
   *visually* as a `thinking` pulse and is never narrated.
-- **ffmpeg 8.1.1 has no `rubberband` and no `areverb`.** Pitch-shift is
+- **ffmpeg 8.1.1 here has no `rubberband`, `areverb` or `drawtext`.** Pitch-shift is
   `asetrate`+`aresample`+`atempo`; reverb is `afir` convolution or stacked `aecho`.
 - **Never hand-tune the matching EQ — run `npm run fit-eq`.** Five hand-tuning attempts failed to
   converge (max error oscillated 17 → 8 → 5.6 → 8.6 dB) because a high-Q notch cannot shift a band
@@ -184,6 +186,17 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 - **`loudnorm` is load-bearing.** `say` loudness varies per utterance; without it the orb's
   response amplitude would depend on sentence length.
 - **`antialias: true` is a no-op through `EffectComposer`** — use a `{ samples: 4 }` render target.
+- **A frame-difference image cannot isolate one animated system.** Drift, spin, edge shimmer, edge
+  aging and pulses all animate every frame, so diffing consecutive frames lights up the entire
+  graph and says nothing about the system under test. Use `ORB_FREEZE=1` to stop the ambient
+  motion, or `ORB_SOLO=1` to draw jolts alone against black — that is what confirmed the jolt
+  segments travel rather than whole edges flashing.
+- **Jolts must reroute on edge rebuild, never be culled.** The outer graph rewires every 1.8s, so
+  dropping jolts whose current edge vanished capped travel at the rebuild interval however long
+  their lifetime was — measured 0.3 jolts in flight vs 1.89 after rerouting.
+- **A jolt's head-to-tail fade must accumulate across edge pieces.** Measuring the fade within
+  each piece independently restarts the ramp at every node, which reads as a dashed line, and in
+  the first version it also came out inverted — bright tail, dim head.
 - **`Points` render round.** Streak particles must be short `LineSegments` oriented along velocity,
   or instanced quads.
 - **Config files are 2-space; TypeScript source is 4-space** (matches the sibling Node projects).

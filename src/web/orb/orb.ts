@@ -274,11 +274,21 @@ export class Orb {
     }
 
     get debug(): Record<string, unknown> {
-        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this.level };
+        return { inner: this.inner.debug, outer: this.outer.debug, pulses: this.pulses.length, level: this.level, idleFloor: this.idleFloor };
     }
+
+    /**
+     * Resting level the orb never falls below. 0 lets it collapse to dark.
+     *
+     * At a dead 0 the orb reads as switched off — the centre gradient has nothing to grade and
+     * the lattice goes nearly invisible, so idle looks like a fault rather than like a machine
+     * waiting. 0.22 is the level where both are legible while still sitting clearly below speech.
+     */
+    idleFloor = 0.22;
 
     /** VU ballistics — fast attack, slow release, frame-rate independent. */
     setLevel(target: number, dt: number): void {
+        target = Math.max(target, this.idleFloor);
         const tau = (target > this.level ? 30 : 220) / 1000;
         this.level += (target - this.level) * (1 - Math.exp(-dt / tau));
     }

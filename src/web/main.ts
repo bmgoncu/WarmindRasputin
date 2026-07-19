@@ -58,8 +58,16 @@ addEventListener("resize", () => {
 // Until M3 wires real audio features, a slider and a simulated speech envelope stand in.
 const slider = document.getElementById("level") as HTMLInputElement;
 const modeBtn = document.getElementById("mode") as HTMLButtonElement;
+const floorBtn = document.getElementById("floor") as HTMLButtonElement;
 const readout = document.getElementById("readout") as HTMLElement;
 let simulate = false;
+
+// A/B the resting level: the orb idling at 0.22 against the same scene collapsing to dark.
+const FLOOR = 0.22;
+floorBtn.addEventListener("click", () => {
+    orb.idleFloor = orb.idleFloor > 0 ? 0 : FLOOR;
+    floorBtn.textContent = orb.idleFloor > 0 ? `floor ${FLOOR}` : "floor off";
+});
 
 modeBtn.addEventListener("click", () => {
     simulate = !simulate;
@@ -91,7 +99,7 @@ function frame(): void {
     orb.setLevel(target, dt);
     orb.update(dt, t);
 
-    readout.textContent = target.toFixed(2);
+    readout.textContent = orb.level.toFixed(2);
     composer.render();
     requestAnimationFrame(frame);
 }
