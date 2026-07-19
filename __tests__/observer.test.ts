@@ -236,14 +236,17 @@ describe("pinning a session", () => {
         expect(said).toEqual(["From the first session here."]);
     });
 
-    it("includes the pinned session's subagents", () => {
-        // Subagent transcripts carry no session id of their own; theirs is the parent directory.
+    it("never narrates subagent work, even for the pinned session", () => {
+        // Deliberate reversal of the original design. Delegated work is a different voice
+        // reporting internal progress, and narrating it buries the session's own answers.
         const { obs, said } = makeObserver();
         obs.setPinned(S1);
-        feedPath(obs, `/p/proj/${S1}/subagents/agent-xyz.jsonl`, [
-            assistant([{ type: "text", text: "Delegated work reporting back." }], "c"),
-        ]);
-        expect(said).toHaveLength(1);
+        (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({
+            path: `/p/proj/${S1}/subagents/agent-xyz.jsonl`,
+            subagent: true,
+            lines: [assistant([{ type: "text", text: "Delegated work reporting back." }], "c")],
+        });
+        expect(said).toEqual([]);
     });
 
     it("ignores hook events from other sessions while pinned", () => {

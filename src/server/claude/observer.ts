@@ -61,7 +61,8 @@ const SPEAK_MAX_CHARS = 320;
 const SPEAK_MIN_CHARS = 12;
 
 export class SessionObserver {
-    private readonly tailer = new TranscriptTailer();
+    // Subagent transcripts are neither followed nor narrated — see the TranscriptTailer doc.
+    private readonly tailer = new TranscriptTailer(undefined, false);
     private readonly sessions = new SessionWatcher();
     /** sessionId → cwd, so completion announcements can name the project. */
     private readonly cwdBySession = new Map<string, string>();
@@ -213,6 +214,9 @@ export class SessionObserver {
 
     private onTranscript(ev: TailEvent): void {
         if (!this.enabled) return;
+        // Belt and braces: discovery is off, but a subagent path could still be followed if one
+        // were handed over by a hook. Delegated work is never narrated.
+        if (ev.subagent) return;
         // Derived from the path rather than read from the line: subagent transcripts carry no
         // session id of their own, and the parent's uuid is in their directory.
         if (!this.narratable(sessionIdForPath(ev.path))) return;

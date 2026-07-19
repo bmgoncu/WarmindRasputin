@@ -147,7 +147,10 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 - **Tail transcripts by `(inode, byte offset)` — never mtime.** Idle sessions are touched hourly
   with *zero bytes appended*; an mtime/FSEvents watcher fires spurious wakeups. Verified.
 - **Subagent work lands in separate files** at `<session-uuid>/subagents/agent-<id>.jsonl`. Watching
-  only the parent transcript goes blind during delegation.
+  only the parent transcript goes blind during delegation — which is what the observer deliberately
+  wants: delegated work is a different voice reporting internal progress, and narrating it buries
+  the session's own answers. `TranscriptTailer` still supports following them; the observer passes
+  `followSubagents: false`, cutting polled files from 74 to 11.
 - **The project-path encoding is lossy** — both `/` and `_` map to `-`, so `merge-mogul_2` and
   `merge-mogul-2` collide. Never reverse it; read `cwd` inside the JSONL, or take `transcript_path`
   straight from the hook payload.

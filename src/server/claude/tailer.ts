@@ -94,7 +94,18 @@ export class TranscriptTailer {
 
     onLines: ((ev: TailEvent) => void) | null = null;
 
-    constructor(private readonly pollMs = POLL_MS) {}
+    /**
+     * @param followSubagents Watch `<uuid>/subagents/*.jsonl` alongside the parent transcript.
+     *
+     * The observer turns this OFF, reversing the original design. Delegated work is a different
+     * voice reporting internal progress, and narrating it buries the session's own answers — which
+     * is what a listener actually wants. It also cuts the polled file count from 74 to 11 here.
+     * The capability stays because a transcript viewer would want it.
+     */
+    constructor(
+        private readonly pollMs = POLL_MS,
+        private readonly followSubagents = true,
+    ) {}
 
     /**
      * Starts following a transcript. Safe to call repeatedly with the same path.
@@ -141,7 +152,7 @@ export class TranscriptTailer {
         if (this.scanning) return; // a slow disk must not overlap passes
         this.scanning = true;
         try {
-            await this.discoverSubagents();
+            if (this.followSubagents) await this.discoverSubagents();
             for (const state of [...this.followed.values()]) {
                 const chunk = await readNew(state);
                 if (chunk === null) continue;

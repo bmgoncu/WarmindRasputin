@@ -94,6 +94,21 @@ describe("TranscriptTailer", () => {
         expect(seen).toHaveLength(1);
     });
 
+    it("can be told not to follow subagents at all", async () => {
+        // What the observer does: delegated work is not narrated, and skipping discovery cuts the
+        // polled file count from 74 to 11 on this machine.
+        const p = join(dir, "sess.jsonl");
+        await writeFile(p, line("start"));
+        const t = new TranscriptTailer(undefined, false);
+        await t.follow(p);
+        await t.tick();
+        const subDir = subagentDirFor(p);
+        await mkdir(subDir, { recursive: true });
+        await writeFile(join(subDir, "agent-abc.jsonl"), line("delegated"));
+        await t.tick();
+        expect(t.watching).toHaveLength(1);
+    });
+
     it("discovers subagent transcripts that appear mid-session", async () => {
         // Watching only the parent goes blind during delegation.
         const p = join(dir, "sess.jsonl");

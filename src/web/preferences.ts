@@ -243,6 +243,7 @@ void refreshHook();
 // --- which session to listen to ------------------------------------------------------------
 const focusSel = $<HTMLSelectElement>("focus");
 const focusHint = $<HTMLElement>("focushint");
+const autoFollow = $<HTMLInputElement>("auto");
 
 interface LiveSession {
     sessionId: string;
@@ -275,11 +276,11 @@ async function refreshSessions(): Promise<void> {
     lastSessionKey = key;
 
     const wanted = data.pinned ?? "";
+    autoFollow.checked = wanted === "";
+    // Disabled rather than hidden when automatic: the list is still worth seeing, and a control
+    // that vanishes is harder to find again than one that is greyed.
+    focusSel.disabled = wanted === "";
     focusSel.innerHTML = "";
-    const auto = document.createElement("option");
-    auto.value = "";
-    auto.textContent = `Most recent session (${data.sessions.length} live)`;
-    focusSel.appendChild(auto);
 
     for (const s of data.sessions) {
         const opt = document.createElement("option");
@@ -295,14 +296,23 @@ async function refreshSessions(): Promise<void> {
         opt.textContent = `${wanted.slice(0, 8)} — not running`;
         focusSel.appendChild(opt);
     }
-    focusSel.value = wanted;
+    focusSel.value = wanted || (data.sessions[0]?.sessionId ?? "");
     focusHint.textContent = wanted
         ? "Only this session is narrated. Others are ignored until you change this."
-        : "Follows whichever session was most recently active.";
+        : `Narrates whichever session was most recently active — ${data.sessions.length} live. Shown as "Auto <project>" beside the tray icon.`;
 }
 
 focusSel.addEventListener("change", () => {
+    if (autoFollow.checked) return;
     push({ focusSessionId: focusSel.value || null });
+    lastSessionKey = "";
+    void refreshSessions();
+});
+
+autoFollow.addEventListener("change", () => {
+    // Leaving automatic pins whatever is selected in the list, so the switch never lands in a
+    // state with no session chosen.
+    push({ focusSessionId: autoFollow.checked ? null : focusSel.value || null });
     lastSessionKey = "";
     void refreshSessions();
 });

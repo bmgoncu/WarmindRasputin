@@ -92,7 +92,9 @@ with a global hook every session on the machine reports in.
 Turn narration on from **Preferences → Narrate Claude sessions** — no terminal needed. It edits
 `~/.claude/settings.json`, backs it up first, and leaves any other hooks alone. It is **off until
 you turn it on**: the daemon can find live sessions by itself, so the switch is the opt-in.
-**Listen to** picks a single session to narrate, or follows whichever was most recently active.
+**Follow the active session** narrates whichever session was most recently active — the tray then
+reads `Auto merge-mogul +2`. Turn it off and **Listen to** pins one session, shown by name alone.
+Subagent transcripts are never narrated.
 
 **Cmd+Shift+R** toggles between *ambient* (visible, click-through) and *interactive* (focused,
 controls shown). Preferences holds the orb tuning, subtitles, default voice mode, opaque-vs-
