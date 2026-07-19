@@ -125,6 +125,25 @@ check_voice() {
 check_voice "Tom (Enhanced)" "base voice for warmind/measured/plain" required
 check_voice "Yuri (Enhanced)" "ru_RU male, required by the og-warmind chain" optional
 
+# --- rust (M4 overlay) ---------------------------------------------------------------------
+head_ "Rust (M4 overlay)"
+# Homebrew's rustup keeps its shims in its own opt dir, NOT ~/.cargo/bin, so `brew install rustup`
+# leaves rustc and cargo off PATH even after `rustup default stable` succeeds. Detect that
+# specific state and name the fix rather than reporting rust as missing.
+RUSTUP_SHIMS="$(brew --prefix rustup 2>/dev/null)/bin"
+if command -v rustc >/dev/null 2>&1; then
+    ok "rustc $(rustc --version | awk '{print $2}')"
+    ok "cargo $(cargo --version | awk '{print $2}')"
+elif [[ -x "$RUSTUP_SHIMS/rustc" ]]; then
+    warn "rust is installed but not on PATH"
+    note "add to your shell profile:  export PATH=\"$RUSTUP_SHIMS:\$PATH\""
+elif command -v rustup >/dev/null 2>&1; then
+    warn "rustup present but no toolchain — run: rustup default stable"
+else
+    warn "rust not installed — needed for the M4 overlay only"
+    note "brew install rustup && rustup default stable"
+fi
+
 # --- claude cli ----------------------------------------------------------------------------
 head_ "Claude CLI"
 if command -v claude >/dev/null 2>&1; then

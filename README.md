@@ -42,6 +42,8 @@ npm run say -- "All systems operational"
 | Setup / preflight | `./scripts/setup.sh` · `./scripts/setup.sh --check` |
 | Run the daemon | `npm run daemon` (:7331, reloads on edit) |
 | Run the renderer | `npm run orb` (:7332) |
+| Run the overlay | `npm run overlay` — transparent, always-on-top |
+| Build the overlay app | `npm run overlay:build` |
 | Render one line and play it | `npm run say -- "some line"` |
 | A/B chain variants vs. the reference | `npm run audition -- "some line"` |
 | Speak through the daemon | `curl -s localhost:7331/speak -H 'content-type: application/json' -d '{"text":"..."}'` |
@@ -77,8 +79,12 @@ Rasputin is deliberately unintelligible and the subtitle carries the meaning.
 
 ## Status
 
-M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding — **done**.
-M4 Tauri overlay · M5 observe sessions · M6 drive Claude · M7 persona — pending.
+M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding · M4 overlay shell —
+**done**. M5 observe sessions — transcript reading and tailing done, hook endpoint pending.
+M6 drive Claude · M7 persona — pending.
+
+**Cmd+Shift+R** toggles the overlay between *ambient* (visible, click-through) and *interactive*
+(focused, controls shown).
 
 ## Reference media
 

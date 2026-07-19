@@ -22,9 +22,13 @@
     "extract-ambience": "tsx src/server/audio/extract-ambience.ts",
     "orb": "vite",
     "orb:build": "vite build",
+    "overlay": "tauri dev",
+    "overlay:build": "tauri build",
     "daemon": "tsx watch src/server/daemon.ts"
   },
   "devDependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/jest": "^29.5.12",
     "@types/node": "^22.10.0",
     "@types/three": "^0.185.1",

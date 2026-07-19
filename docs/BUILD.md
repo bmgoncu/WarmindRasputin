@@ -27,7 +27,7 @@ made by measurement, the measurement is here.
 | **claude CLI** | `og-warmind` translation | Speaks the untranslated English; fails soft by design |
 | **Playwright Chromium** | `tools/shoot.ts` | No screenshot feedback loop |
 | **`assets/refs/`** | `analyze-ref`, `fit-eq` | Those two commands only; the fitted curve is already committed |
-| **Rust toolchain** | M4 Tauri overlay | Not yet needed — M0–M3 require no Rust at all |
+| **Rust toolchain** | M4 Tauri overlay | The overlay only; the daemon and renderer need no Rust |
 
 `./scripts/setup.sh` checks all of the above and installs what it safely can. Re-running it is the
 intended way to verify an environment. `--check` verifies without changing anything.
@@ -71,6 +71,7 @@ Runtime dependencies are deliberately near-zero. Everything below is a considere
 | **`three`** + `@types/three` | WebGL | The orb is a layered particle/line scene; hand-rolling WebGL would be weeks for no gain. `@types/three` is separate because three ships no bundled types. |
 | **`jest`** + `ts-jest` | Tests | Matches the sibling projects in `Depo/`. ESM, so `npm test` sets `--experimental-vm-modules`. |
 | **`playwright`** | Screenshot harness | Headless Chrome's `--screenshot` renders **blank frames** for WebGL on this machine and hangs on every software-GL flag combination. Playwright ships its own Chromium with working GL. This is why it is a dependency rather than a convenience. |
+| **`@tauri-apps/cli`** + `@tauri-apps/api` | Overlay shell | Tauri v2. Chosen over Electron: the webview is the system WebKit rather than a bundled Chromium, so the app is ~10 MB instead of ~150, and transparent always-on-top windows are first-class. |
 | **`@types/node`**, `@types/jest`, `@types/ws` | Types | — |
 
 ### Deliberately absent
@@ -233,7 +234,27 @@ orb animating while audio is still fetching and decoding.
 
 ---
 
-## 6. Operational notes
+## 6. The overlay (M4)
+
+`src-tauri/` is deliberately thin — four things a browser cannot do for itself, and nothing else:
+a transparent undecorated always-on-top window, click-through, a global hotkey that fires while
+another app has focus, and staying off the Dock. Everything with behaviour is in the daemon and
+the renderer, which loads unchanged from Chrome.
+
+- **`macOSPrivateApi: true` is required** in `tauri.conf.json` for a transparent window on macOS.
+- **Homebrew's `rustup` puts its shims in its own opt dir, not `~/.cargo/bin`.** So
+  `brew install rustup && rustup default stable` succeeds and still leaves `rustc` and `cargo` off
+  PATH. Add `export PATH="$(brew --prefix rustup)/bin:$PATH"`. `setup.sh` detects this exact state.
+- **`frontendDist` is `../lib/web`, not `../dist`** — `vite.config.ts` builds to `lib/web`. The
+  daemon's static route had the same mistake and would have 404'd every asset in production,
+  invisible in development where Vite serves the page.
+- **`Cargo.lock` is committed.** Convention for a binary crate; it is what makes the build
+  reproducible.
+- **Cmd+Shift+R toggles ambient ↔ interactive**, not show/hide. The orb is meant to be present the
+  way a status light is, and an overlay you must summon before it can tell you anything defeats
+  the observing half of the project.
+
+## 7. Operational notes
 
 - **`npm run daemon` runs under `tsx watch`.** Plain `tsx` has no reload, and a stale daemon
   answers every request normally while serving old code — a fix then appears not to work.

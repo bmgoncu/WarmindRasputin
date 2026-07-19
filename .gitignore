@@ -21,3 +21,6 @@ src-tauri/target/
 
 # Audition renders — regenerable via `npm run say`.
 samples/
+
+# Tauri generated schemas and build cache (M4). target/ is already ignored above.
+src-tauri/gen/

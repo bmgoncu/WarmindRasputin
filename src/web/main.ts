@@ -16,6 +16,7 @@ import { SpeechPlayer } from "./audio/feature-driver.js";
 import { DaemonLink } from "./net/client.js";
 import { DAEMON_PORT } from "../shared/protocol.js";
 import { Subtitle } from "./ui/subtitle.js";
+import { setupOverlay, inOverlay } from "./overlay.js";
 
 const canvas = document.getElementById("orb") as HTMLCanvasElement;
 
@@ -240,6 +241,13 @@ textInput.addEventListener("keydown", (e) => {
 // Dev harness hook: lets tools/shoot.ts and ad-hoc checks read live orb state instead of
 // inferring it from pixels. readPixels returns empty after frame present unless
 // preserveDrawingBuffer is set, so pixel-sampling gives false negatives.
+// Overlay presentation. Harmless no-op in Chrome, where the dev controls stay visible.
+const overlayActive = setupOverlay([
+    document.getElementById("ui") as HTMLElement,
+    document.getElementById("say") as HTMLElement,
+]);
+if (overlayActive) console.log("running as overlay — Cmd+Shift+R toggles interactivity");
+
 (window as unknown as { __orb: () => unknown }).__orb = () => orb.debug;
 (window as unknown as { __freeze: () => void }).__freeze = () => orb.freeze();
 (window as unknown as { __solo: () => void }).__solo = () => orb.solo();
@@ -250,6 +258,7 @@ textInput.addEventListener("keydown", (e) => {
     level: player.sample(),
     progress: player.progress,
     text: player.currentText,
+    overlay: inOverlay(),
     subtitle: subtitle.text,
     subsEnabled: subtitle.isEnabled,
     cues: subtitle.state,

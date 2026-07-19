@@ -30,7 +30,9 @@ import { DAEMON_PORT, isClientMsg, type ServerMsg, type SpeakMsg } from "../shar
 
 const STARTED_AT = new Date().toISOString();
 const CACHE_DIR = resolve("cache");
-const DIST_DIR = resolve("dist");
+// vite.config.ts builds to lib/web, not dist/. This pointed at dist/ and so silently served 404
+// for every asset in production — invisible in development, where Vite serves the page instead.
+const DIST_DIR = resolve("lib", "web");
 
 const MIME: Record<string, string> = {
     ".html": "text/html; charset=utf-8",
@@ -176,7 +178,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
     }
 
-    // Static page, when built. Absent in dev, where Vite serves it.
+    // Static page, when built to lib/web. Absent in dev, where Vite serves it.
     const asset = safeJoin(DIST_DIR, url.pathname === "/" ? "/index.html" : url.pathname);
     if (asset && (await serveFile(res, asset))) return;
 

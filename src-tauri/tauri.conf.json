@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rasputin",
+  "version": "0.1.0",
+  "identifier": "com.bmgoncu.rasputin",
+  "build": {
+    "frontendDist": "../lib/web",
+    "devUrl": "http://127.0.0.1:7332",
+    "beforeDevCommand": "npm run orb",
+    "beforeBuildCommand": "npm run orb:build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Rasputin",
+        "width": 520,
+        "height": 520,
+        "resizable": true,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "visible": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:7331 ws://127.0.0.1:7331; media-src 'self' http://127.0.0.1:7331 blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.png"],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}
