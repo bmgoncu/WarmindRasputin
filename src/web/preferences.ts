@@ -36,6 +36,10 @@ const DEFAULTS: Required<Pick<OrbConfig, "idleFloor" | "shakeScale" | "outerRadi
     chain: "measured",
 };
 
+/** Fixed line for the Test voice button — long enough to hear the degradation and the ballistics,
+ *  short enough to re-trigger while dragging a slider. */
+const TEST_LINE = "I am Rasputin, the Warmind! At your service!";
+
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const el = {
@@ -51,6 +55,8 @@ const el = {
     jolts: $<HTMLInputElement>("jolts"),
     arcs: $<HTMLInputElement>("arcs"),
     reset: $<HTMLButtonElement>("reset"),
+    test: $<HTMLButtonElement>("test"),
+    testHint: $<HTMLElement>("testhint"),
     status: $<HTMLElement>("status"),
 };
 
@@ -130,6 +136,30 @@ el.opaque.addEventListener("change", () => push({ opaqueBackground: el.opaque.ch
 el.subs.addEventListener("change", () => push({ subtitles: el.subs.checked }));
 el.chain.addEventListener("change", () => push({ chain: el.chain.value }));
 el.reset.addEventListener("click", () => push({ ...DEFAULTS }));
+
+/**
+ * Speaks a fixed line through the mode currently selected here.
+ *
+ * Sends the chain explicitly rather than relying on the daemon's default, so the dropdown can be
+ * auditioned without committing to it — and so a change made a moment ago is definitely the one
+ * being heard rather than whatever the daemon last persisted.
+ */
+el.test.addEventListener("click", () => {
+    const sent = link.send({ type: "say", text: TEST_LINE, chain: el.chain.value });
+    if (!sent) {
+        el.testHint.textContent = "daemon offline";
+        return;
+    }
+    el.testHint.textContent =
+        el.chain.value === "og-warmind" ? "translating, first time is slow…" : "speaking…";
+    el.test.disabled = true;
+    // No completion signal reaches this window — playback is reported by the renderer that owns
+    // the audio, not by this one — so the button re-arms on a timer rather than pretending to know.
+    window.setTimeout(() => {
+        el.test.disabled = false;
+        el.testHint.textContent = "";
+    }, el.chain.value === "og-warmind" ? 5000 : 2600);
+});
 
 // --- native window geometry ---------------------------------------------------------------
 interface TauriBridge {

@@ -88,8 +88,10 @@ Show Orb · Interactive · Move Overlay · Preferences… · Quit.
 
 **Cmd+Shift+R** toggles between *ambient* (visible, click-through) and *interactive* (focused,
 controls shown). Preferences holds the orb tuning, subtitles, default voice mode, opaque-vs-
-transparent background, and overlay position; settings are owned by the daemon and persisted to
-`cache/config.json`, so the overlay and preferences never disagree.
+transparent background, launch-at-login, and overlay position, plus a **Test voice** button that
+speaks a fixed line through the selected mode so settings can be auditioned without switching
+windows. Settings are owned by the daemon and persisted to `cache/config.json`, so the overlay and
+preferences never disagree.
 
 ## Reference media
 
