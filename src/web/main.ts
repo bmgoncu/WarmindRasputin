@@ -61,6 +61,8 @@ const modeBtn = document.getElementById("mode") as HTMLButtonElement;
 const floorBtn = document.getElementById("floor") as HTMLButtonElement;
 const shake = document.getElementById("shake") as HTMLInputElement;
 const shakeOut = document.getElementById("shakeout") as HTMLElement;
+const reach = document.getElementById("reach") as HTMLInputElement;
+const reachOut = document.getElementById("reachout") as HTMLElement;
 const readout = document.getElementById("readout") as HTMLElement;
 let simulate = false;
 
@@ -68,6 +70,14 @@ shake.addEventListener("input", () => {
     const k = Number(shake.value) / 100;
     orb.setShakeScale(k);
     shakeOut.textContent = `${k.toFixed(2)}x`;
+});
+
+// How far the outer lattice reaches past the shell. Capped at 2.2: the camera sits at z=5.6 with
+// a 45 degree fov, so the visible half-height is 2.32 and anything beyond that leaves the frame.
+reach.addEventListener("input", () => {
+    const r = Number(reach.value) / 100;
+    orb.setOuterRadius(r);
+    reachOut.textContent = r.toFixed(2);
 });
 
 // A/B the resting level: the orb idling at 0.22 against the same scene collapsing to dark.

@@ -21,6 +21,11 @@ import { NodeGraph, type Pulse } from "./graph.js";
 // Base shake amplitudes, as a fraction of each graph's radius. The harness slider scales both,
 // so they stay in proportion — the outer lattice is the one you actually read, and matching the
 // inner graph to it makes the core boil.
+// Outer layer reach, and the world radius the wave front is measured against. The ratio between
+// them must hold when either moves, or the front crosses the two layers in a different proportion.
+const OUTER_RADIUS = 1.78;
+const WORLD_RADIUS = 1.9;
+
 const SHAKE_INNER = 0.009;
 const SHAKE_OUTER = 0.013;
 
@@ -167,7 +172,7 @@ export class Orb {
             centreBoost: 2.2,
             gradientRadius: 0.72,
             volumeFill: 0.9,
-            worldRadius: 1.6,
+            worldRadius: WORLD_RADIUS,
             pushScale: 0.05,
             joltInterval: 0,
             maxJolts: 0,
@@ -178,24 +183,31 @@ export class Orb {
 
         // Outer: sparse, extends well past the shell, slower and more diamond-shaped.
         this.outer = new NodeGraph({
-            nodeCount: 260,
-            radius: 1.45,
+            // Radius grew from 1.45 to reach further past the r=1.0 shell. On its own that only
+            // scales the layer up — maxEdgeDist is a FRACTION of radius, so node spacing and the
+            // edge threshold grow together and the density looks identical. The count and the
+            // degree cap are what actually thin it out; mean degree was sitting at 5.78 against a
+            // cap of 6, meaning the cap was binding on nearly every node.
+            nodeCount: 200,
+            radius: OUTER_RADIUS,
             shape: 1.05,
             drift: 0.035,
             driftSpeed: 0.18,
             // 0.30 ≈ nearest-neighbour spacing. At the previous 0.50 each node reached past its
             // neighbours to 2nd and 3rd ones, so edges crossed and the shell read as debris.
-            maxEdgeDist: 0.3,
-            maxDegree: 6,
+            maxEdgeDist: 0.27,
+            maxDegree: 5,
             rebuildInterval: 1.8,
             spin: -0.045,
             centreBoost: 0.5,
-            gradientRadius: 1.45,
+            gradientRadius: OUTER_RADIUS,
             // Given radial THICKNESS on purpose. At 0.04 this was a one-node-thick shell, so a
             // radial wave lit every node at the same instant — the pingpong. With depth, the
             // front sweeps through it over time.
             volumeFill: 0.32,
-            worldRadius: 1.6,
+            // Shared with the inner graph — see GraphOptions.worldRadius. Raised with the outer
+            // radius so the wave front still crosses the two layers in the same proportion.
+            worldRadius: WORLD_RADIUS,
             // Outer shell takes the visible push; the inner volume moves less.
             pushScale: 0.13,
             // Electric jolts walk the outer shell only.
@@ -269,6 +281,14 @@ export class Orb {
     }
 
     /** Live state for the dev harness. */
+    /** How far the outer lattice reaches past the r=1 shell. Dev harness slider. */
+    setOuterRadius(r: number): void {
+        this.outer.setRadius(r);
+        const w = r * (WORLD_RADIUS / OUTER_RADIUS);
+        this.inner.setWorldRadius(w);
+        this.outer.setWorldRadius(w);
+    }
+
     /** Scales both graphs' shake, 0-2x of the tuned base. Dev harness slider. */
     setShakeScale(k: number): void {
         this.inner.setSpeechJitter(SHAKE_INNER * k);

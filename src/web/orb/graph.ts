@@ -572,6 +572,28 @@ export class NodeGraph {
         }
     }
 
+    /**
+     * Live tuning — rescales the whole layer.
+     *
+     * Base positions are stored already multiplied by radius, so this is a uniform scale, and the
+     * per-frame rest radius follows from them. Topology is unaffected: maxEdgeDist is a FRACTION
+     * of radius, so the edge threshold grows with the node spacing and the same pairs stay
+     * connected. That is precisely why radius alone cannot thin a graph out — only the node count
+     * and the degree cap can.
+     */
+    setRadius(r: number): void {
+        const k = r / this.opts.radius;
+        if (!Number.isFinite(k) || k <= 0) return;
+        for (let i = 0; i < this.base.length; i++) this.base[i] *= k;
+        this.opts.gradientRadius *= k;
+        this.opts.radius = r;
+    }
+
+    /** Shared across graphs — see GraphOptions.worldRadius. */
+    setWorldRadius(v: number): void {
+        this.opts.worldRadius = v;
+    }
+
     /** Live tuning — see the shake slider in the dev harness. */
     setSpeechJitter(v: number): void {
         this.opts.speechJitter = v;
