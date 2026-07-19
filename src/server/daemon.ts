@@ -29,6 +29,7 @@ import { translate } from "./voice/translate.js";
 import { SessionObserver, type HookPayload } from "./claude/observer.js";
 import { hookState, setHook } from "./claude/install-hook.js";
 import { readSessions } from "./claude/sessions.js";
+import { ClaudeDriver } from "./claude/driver.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -179,13 +180,18 @@ export async function speak(text: string, chain = "measured"): Promise<SpeakMsg>
  * is rendered, so this serialises synthesis, not playback.
  */
 let speaking = Promise.resolve();
+
+/** Serialises synthesis so two sources cannot render and broadcast at the same moment. */
+function enqueueSpeech(text: string): void {
+    console.log(`say: ${text.slice(0, 100)}${text.length > 100 ? "…" : ""}`);
+    speaking = speaking
+        .then(() => speak(text, config.chain))
+        .then(() => undefined)
+        .catch((e) => console.error("speak failed:", e));
+}
+
 const observer = new SessionObserver({
-    say: (text) => {
-        speaking = speaking
-            .then(() => speak(text, config.chain))
-            .then(() => undefined)
-            .catch((e) => console.error("observer speak failed:", e));
-    },
+    say: (text) => enqueueSpeech(text),
     pulse: (strength) => broadcast({ type: "pulse", strength }),
     state: (state) => broadcast({ type: "state", state }),
     focus: (info) => {
@@ -201,6 +207,18 @@ const observer = new SessionObserver({
  * this the tray would sit blank until the next session event, which can be minutes.
  */
 let lastFocus: ServerMsg & { type: "focus" } = { type: "focus", sessions: 0 };
+
+/**
+ * The session Rasputin runs himself.
+ *
+ * Its speech goes through the same queue as the observer's, so a driven answer and a narrated one
+ * cannot talk over each other.
+ */
+const driver = new ClaudeDriver({
+    say: (text) => enqueueSpeech(text),
+    state: (state) => broadcast({ type: "state", state }),
+    log: (message) => console.log(`driver: ${message}`),
+});
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
@@ -284,6 +302,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         }
     }
 
+    // Drive Claude over HTTP as well as the socket, so it is scriptable and testable by hand.
+    if (url.pathname === "/ask" && req.method === "POST") {
+        try {
+            const body = JSON.parse((await readBody(req)) || "{}") as { text?: string };
+            if (!body.text?.trim()) {
+                res.writeHead(400, { "content-type": "application/json" });
+                res.end(JSON.stringify({ error: "text is required" }));
+                return;
+            }
+            driver.ask(body.text);
+            res.writeHead(202, { "content-type": "application/json" });
+            res.end(JSON.stringify({ accepted: true, running: driver.isRunning }));
+        } catch (err) {
+            res.writeHead(500, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+    }
+
     if (url.pathname === "/sessions" && req.method === "GET") {
         const live = await readSessions();
         res.writeHead(200, { "content-type": "application/json" });
@@ -362,6 +399,13 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                     void speak(parsed.text, parsed.chain ?? config.chain).catch((e) =>
                         console.error("speak failed:", e),
                     );
+                    break;
+                case "ask":
+                    console.log(`ask: ${parsed.text.slice(0, 80)}`);
+                    driver.ask(parsed.text);
+                    break;
+                case "interrupt":
+                    void driver.interrupt();
                     break;
                 case "set-config": {
                     const { type: _ignored, ...patch } = parsed;

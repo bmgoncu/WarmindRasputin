@@ -294,7 +294,27 @@ the renderer, which loads unchanged from Chrome.
   also works in Chrome, survives a reload of either window, and gives one place to persist from
   (`cache/config.json`). Window-to-window Tauri events would satisfy none of those.
 
-## 7. Editing the user's Claude settings
+## 7. Driving Claude (M6)
+
+`src/server/claude/driver.ts` owns a session rather than watching one. There is no channel to
+inject input into a running Claude session — no FIFOs, no sockets under `~/.claude/` — so driving
+means owning the process.
+
+- **The prompt is an `AsyncIterable`, never a string.** A string prompt is single-shot: the SDK
+  closes the input stream, and `interrupt()` and `setPermissionMode()` become unavailable, because
+  they are control requests that only exist while input is streaming. Being able to cut speech off
+  matters more here than in a text UI — an utterance takes real seconds.
+- **`MessageQueue.close()` must resolve a waiting consumer**, or the SDK's own loop never
+  terminates and the process will not exit.
+- **Speech is per sentence, not per token.** The voice chain renders a whole utterance and derives
+  its feature timeline from it; half a sentence would be rendered, spoken, then contradicted.
+- **`permissionMode` defaults to `default`, not `bypassPermissions`.** A voice assistant that
+  silently runs whatever it decides to is a bad trade even when convenient. The spoken
+  "shall I proceed?" gate belongs in `canUseTool`, and until it exists the safe mode is the one
+  that stops and asks.
+- Driven and observed speech share one queue, so they cannot talk over each other.
+
+## 8. Editing the user's Claude settings
 
 `~/.claude/settings.json` governs every Claude session on the machine, so the hook installer is
 held to a higher bar than the rest of the project:
@@ -323,7 +343,7 @@ held to a higher bar than the rest of the project:
   file by scanning for `<sessionId>.jsonl`, which is exact, rather than reversing the lossy
   project-path encoding.
 
-## 8. Operational notes
+## 9. Operational notes
 
 - **`npm run daemon` runs under `tsx watch`.** Plain `tsx` has no reload, and a stale daemon
   answers every request normally while serving old code — a fix then appears not to work.

@@ -156,11 +156,28 @@ export interface PlaybackMsg {
     ctxLatency?: number;
 }
 
-/** Typed instruction from the renderer's text field. */
+/** Typed instruction from the renderer's text field — spoken verbatim, not sent to Claude. */
 export interface SayMsg {
     type: "say";
     text: string;
     chain?: string;
+}
+
+/**
+ * A request for Claude to actually do something, answered aloud.
+ *
+ * Distinct from `say`, which is Rasputin reading a line back. This one runs an agent.
+ */
+export interface AskMsg {
+    type: "ask";
+    text: string;
+    /** Working directory for the driven session. Defaults to the daemon's own. */
+    cwd?: string;
+}
+
+/** Stop the driven session mid-answer. */
+export interface InterruptMsg {
+    type: "interrupt";
 }
 
 /** A settings change from the preferences window. The daemon persists it and rebroadcasts. */
@@ -186,7 +203,7 @@ export interface LogMsg {
     message: string;
 }
 
-export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | SetConfigMsg | GetConfigMsg | LogMsg;
+export type ClientMsg = HelloMsg | PlaybackMsg | SayMsg | AskMsg | InterruptMsg | SetConfigMsg | GetConfigMsg | LogMsg;
 
 /**
  * Narrows an unknown parsed JSON value to a ServerMsg.
@@ -206,6 +223,13 @@ export function isClientMsg(v: unknown): v is ClientMsg {
     if (typeof v !== "object" || v === null) return false;
     const t = (v as { type?: unknown }).type;
     return (
-        t === "hello" || t === "playback" || t === "say" || t === "set-config" || t === "get-config" || t === "log"
+        t === "hello" ||
+        t === "playback" ||
+        t === "say" ||
+        t === "ask" ||
+        t === "interrupt" ||
+        t === "set-config" ||
+        t === "get-config" ||
+        t === "log"
     );
 }

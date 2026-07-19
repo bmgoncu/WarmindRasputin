@@ -47,6 +47,7 @@ npm run say -- "All systems operational"
 | Render one line and play it | `npm run say -- "some line"` |
 | A/B chain variants vs. the reference | `npm run audition -- "some line"` |
 | Install the observe hook | `npm run hook:install` (prints a diff; add `-- --apply` to write) |
+| Ask Claude, answered aloud | `curl -s localhost:7331/ask -H 'content-type: application/json' -d '{"text":"..."}'` |
 | Speak through the daemon | `curl -s localhost:7331/speak -H 'content-type: application/json' -d '{"text":"..."}'` |
 | Screenshot the orb | `npx tsx tools/shoot.ts <level> <out.png>` |
 | Tests | `npm test` |
@@ -82,7 +83,8 @@ Rasputin is deliberately unintelligible and the subtitle carries the meaning.
 
 M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding · M4 overlay shell ·
 M5 observe sessions — **done**.
-M6 drive Claude · M7 persona · M8 standalone app and release — pending.
+M6 drive Claude — text half done, voice input pending. M7 persona · M8 standalone app and
+release — pending.
 
 The overlay is a **menu-bar app** — no Dock icon. Its tray glyph carries the menu:
 Show Orb · Interactive · Move Overlay · Preferences… · Quit. Beside the glyph it names the Claude
