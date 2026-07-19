@@ -92,6 +92,13 @@ export interface GraphOptions {
     /** Cap on simultaneous jolts. */
     maxJolts: number;
     /**
+     * How far nodes vibrate at full level, as a fraction of radius. 0 disables.
+     *
+     * Speech energy shakes the lattice — the structure is being driven, not just lit. Kept small:
+     * past roughly 0.05 the edges smear and the graph stops reading as a fixed structure.
+     */
+    speechJitter: number;
+    /**
      * How strongly brightness rises toward the centre, 0–1.
      *
      * The single biggest difference from the reference when this was missing: the reference is
@@ -193,13 +200,14 @@ export class NodeGraph {
     }
 
     /** Live counts for the dev harness — see window.__orb in main.ts. */
-    get debug(): { jolts: number; edges: number; nodes: number; litEdges: number; hops: number[]; stat: Record<string, number> } {
+    get debug(): { jolts: number; edges: number; nodes: number; litEdges: number; hops: number[]; shake: number; stat: Record<string, number> } {
         return {
             jolts: this.jolts.length,
             edges: this.edges.length,
             nodes: this.opts.nodeCount,
             litEdges: this.jolts.reduce((n, j) => n + Math.ceil(j.tail) + 1, 0),
             hops: this.jolts.map((j) => j.hops),
+            shake: Math.sqrt(this.jitter.reduce((a, v) => a + v * v, 0) / this.jitter.length),
             stat: { ...this.joltStat },
         };
     }
@@ -222,8 +230,10 @@ export class NodeGraph {
     private nextJolt = 1.5;
     private joltStat = { spawned: 0, expired: 0, isolated: 0, rewired: 0, culled: 0 };
     private soloJolts = false;
-    /** Per-node jitter offset applied by active jolts, in world units. */
+    /** Per-node jitter offset from jolts and speech energy, in world units. */
     private readonly jitter: Float32Array;
+    /** Fixed per-axis phases so each node vibrates independently rather than the graph pulsing. */
+    private readonly shakePhase: Float32Array;
     private sinceRebuild = 0;
 
     private readonly lines: THREE.LineSegments;
@@ -255,6 +265,8 @@ export class NodeGraph {
         this.nodeGain = new Float32Array(n);
         this.nodeRest = new Float32Array(n);
         this.jitter = new Float32Array(n * 3);
+        this.shakePhase = new Float32Array(n * 3);
+        for (let i = 0; i < n * 3; i++) this.shakePhase[i] = rand() * Math.PI * 2;
 
         // Fibonacci sphere for even angular coverage, then pushed onto the superellipsoid.
         // Purely random directions leave visible clumps and voids at these counts.
@@ -560,6 +572,28 @@ export class NodeGraph {
     }
 
     /**
+     * Adds speech-driven vibration on top of whatever the jolts contributed.
+     *
+     * Deterministic sines of time rather than per-frame Math.random(): random jitter re-rolled
+     * every frame vibrates faster on a 120 Hz display than on a 60 Hz one, so the orb would feel
+     * different on different monitors. Two octaves, because a single sine reads as a smooth
+     * wobble rather than as a driven structure.
+     *
+     * level^1.8 keeps idle still — at the 0.22 floor the shake is ~6% of its full value, so it
+     * only arrives with actual speech energy.
+     */
+    private applySpeechJitter(t: number, level: number): void {
+        const o = this.opts;
+        if (o.speechJitter <= 0 || level < 0.02) return;
+        const amp = o.speechJitter * o.radius * level ** 1.8;
+        const n = o.nodeCount;
+        for (let i = 0; i < n * 3; i++) {
+            const ph = this.shakePhase[i];
+            this.jitter[i] += (Math.sin(t * 44 + ph) * 0.65 + Math.sin(t * 107 + ph * 2.3) * 0.35) * amp;
+        }
+    }
+
+    /**
      * Emits the lit sub-segments for every jolt.
      *
      * Walks backward from the head along the path, consuming `tail` edge-lengths and clipping to
@@ -699,6 +733,7 @@ export class NodeGraph {
         (this.points.geometry.getAttribute("aBright") as THREE.BufferAttribute).needsUpdate = true;
 
         this.updateJolts(dt, level);
+        this.applySpeechJitter(t, level);
 
         this.sinceRebuild += dt;
         if (this.sinceRebuild >= o.rebuildInterval) {

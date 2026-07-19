@@ -160,6 +160,7 @@ export class Orb {
             pushScale: 0.05,
             joltInterval: 0,
             maxJolts: 0,
+            speechJitter: 0.022,
             colour: 0xffb070,
             seed: 4242,
         });
@@ -189,6 +190,7 @@ export class Orb {
             // Electric jolts walk the outer shell only.
             joltInterval: 1.6,
             maxJolts: 3,
+            speechJitter: 0.034,
             colour: 0xff5f26,
             seed: 90210,
         });
