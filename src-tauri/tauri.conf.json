@@ -7,7 +7,7 @@
     "frontendDist": "../lib/web",
     "devUrl": "http://127.0.0.1:7332",
     "beforeDevCommand": "npm run orb",
-    "beforeBuildCommand": "npm run orb:build"
+    "beforeBuildCommand": "npm run build && npm run orb:build"
   },
   "app": {
     "withGlobalTauri": true,

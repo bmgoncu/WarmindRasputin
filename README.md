@@ -81,7 +81,7 @@ Rasputin is deliberately unintelligible and the subtitle carries the meaning.
 
 M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding · M4 overlay shell —
 **done**. M5 observe sessions — transcript reading and tailing done, hook endpoint pending.
-M6 drive Claude · M7 persona — pending.
+M6 drive Claude · M7 persona · M8 standalone app and release — pending.
 
 The overlay is a **menu-bar app** — no Dock icon. Its tray glyph carries the menu:
 Show Orb · Interactive · Move Overlay · Preferences… · Quit.

@@ -16,8 +16,108 @@ use tauri::{
     tray::TrayIconBuilder,
     Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+/// The daemon process we started, if we started it.
+///
+/// Only set when the overlay launched it. A daemon the user is already running in a terminal is
+/// left completely alone — adopting it would mean killing their process on quit.
+struct DaemonProcess(std::sync::Mutex<Option<Child>>);
+
+/// Is something already listening on the daemon port?
+///
+/// A TCP connect rather than an HTTP health check: it answers the only question that matters
+/// before spawning, and avoids pulling an HTTP client into a crate that otherwise needs none.
+fn daemon_running() -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    use std::time::Duration;
+    let addr: SocketAddr = ([127, 0, 0, 1], 7331).into();
+    TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok()
+}
+
+/// Absolute path to node.
+///
+/// Searched explicitly because a GUI app launched at login inherits a MINIMAL PATH —
+/// `/usr/bin:/bin:/usr/sbin:/sbin`, with no Homebrew. On this machine node exists only at
+/// /opt/homebrew/bin/node, so relying on PATH means launch-at-login silently comes up mute.
+fn find_node() -> Option<PathBuf> {
+    let candidates = [
+        "/opt/homebrew/bin/node",
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+        "/opt/homebrew/opt/node/bin/node",
+    ];
+    for c in candidates {
+        let p = PathBuf::from(c);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    // Last resort: whatever PATH we do have.
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|d| d.join("node"))
+            .find(|p| p.is_file())
+    })
+}
+
+/// Where the project lives, so the daemon can be started from it.
+///
+/// RASPUTIN_ROOT wins if set; otherwise the path recorded at compile time. The daemon resolves
+/// `cache/` relative to its working directory, so this must be the repo root, not the bundle.
+fn project_root() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("RASPUTIN_ROOT") {
+        let p = PathBuf::from(dir);
+        if p.is_dir() {
+            return Some(p);
+        }
+    }
+    let compiled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)?;
+    compiled.is_dir().then_some(compiled)
+}
+
+/// Starts the daemon if nothing is serving yet.
+///
+/// Runs the COMPILED `lib/server/daemon.js` rather than going through npm or tsx: a login-launched
+/// app has neither on PATH, and node alone is one fewer thing to locate.
+fn ensure_daemon() -> Option<Child> {
+    if daemon_running() {
+        println!("daemon already running — leaving it alone");
+        return None;
+    }
+    let node = find_node()?;
+    let root = project_root()?;
+    let entry = root.join("lib/server/daemon.js");
+    if !entry.is_file() {
+        eprintln!("daemon not built at {} — run: npm run build", entry.display());
+        return None;
+    }
+    // stdin is piped and the handle deliberately held for the app's whole life. The daemon exits
+    // when that pipe closes, which happens however this process dies — including SIGKILL, where no
+    // exit handler runs at all. Relying on the Exit event alone leaked a daemon on every crash or
+    // `pkill`, verified.
+    match Command::new(&node)
+        .arg(&entry)
+        .current_dir(&root)
+        .stdin(Stdio::piped())
+        .env("RASPUTIN_PARENT_PIPE", "1")
+        .spawn()
+    {
+        Ok(child) => {
+            println!("started daemon: {} {}", node.display(), entry.display());
+            Some(child)
+        }
+        Err(e) => {
+            eprintln!("could not start daemon: {e}");
+            None
+        }
+    }
+}
 
 /// Live window state.
 ///
@@ -123,6 +223,7 @@ fn open_preferences(app: tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(OverlayState { click_through: std::sync::Mutex::new(true) })
+        .manage(DaemonProcess(std::sync::Mutex::new(None)))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -144,6 +245,13 @@ pub fn run() {
             // the only affordance, which is the point of this shape.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // Launch at login has to mean the whole thing works, so the overlay brings the daemon
+            // up itself when nothing is serving. Started before the window so the renderer's first
+            // connection attempt usually lands.
+            if let Some(child) = ensure_daemon() {
+                *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
+            }
 
             let window = app.get_webview_window("main").expect("main window missing");
 
@@ -240,6 +348,15 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running rasputin overlay");
+        .build(tauri::generate_context!())
+        .expect("error while building rasputin overlay")
+        .run(|app, event| {
+            // Only ever kills a daemon this process started — see DaemonProcess.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(mut child) = app.state::<DaemonProcess>().0.lock().unwrap().take() {
+                    let _ = child.kill();
+                    println!("stopped the daemon we started");
+                }
+            }
+        });
 }

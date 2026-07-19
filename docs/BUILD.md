@@ -273,6 +273,18 @@ the renderer, which loads unchanged from Chrome.
   in the overlay while working in Chrome.
 - **The renderer logs to the daemon** via a `log` client message, since a release-build WKWebView
   has no devtools to open.
+- **The overlay starts the daemon itself** when nothing is listening on 7331, so launch-at-login
+  needs no second step. Three rules make that safe:
+  - It runs the COMPILED `lib/server/daemon.js` via an absolute `node` path. A GUI app launched at
+    login inherits a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`) with no Homebrew, and on this
+    machine node exists only at `/opt/homebrew/bin/node` — relying on PATH means it comes up mute.
+  - It only kills a daemon **it** started. One you are running in a terminal is adopted and left
+    alone, including when the app quits.
+  - The daemon's lifetime is tied to its **stdin pipe**, not to a graceful shutdown handler. The
+    parent holds the write end for its whole life, so the daemon exits however the overlay dies —
+    including SIGKILL, where no exit handler runs. Relying on the Exit event alone leaked a daemon
+    on every crash, which was measured, not assumed.
+  - `RASPUTIN_ROOT` overrides the compile-time project path.
 - **`Image::from_path` needs tauri's `image-png` feature.** Without it the tray can only use the
   compiled-in window icon.
 - **Preferences is a second window with its own vite entry.** `rollupOptions.input` must list

@@ -282,6 +282,22 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
 
     void loadConfig();
 
+    // Started by the overlay: exit when its stdin pipe closes.
+    //
+    // The parent holds the write end for its entire life, so this fires however the overlay dies —
+    // including SIGKILL, where no shutdown handler runs. Without it a killed overlay orphans the
+    // daemon, and the next launch finds the port taken by a process nothing owns.
+    if (process.env.RASPUTIN_PARENT_PIPE === "1") {
+        process.stdin.resume();
+        const bye = (): void => {
+            console.log("parent went away — exiting");
+            process.exit(0);
+        };
+        process.stdin.on("end", bye);
+        process.stdin.on("close", bye);
+        process.stdin.on("error", bye);
+    }
+
     server.listen(port, "127.0.0.1", () => {
         console.log(`rasputin daemon on http://127.0.0.1:${port}  (ws /ws)`);
     });
