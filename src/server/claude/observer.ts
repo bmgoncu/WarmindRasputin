@@ -17,7 +17,7 @@
 
 import { sessionIdForPath, TranscriptTailer, type TailEvent } from "./tailer.js";
 import { findTranscript, SessionWatcher, type SessionChange, type SessionEntry } from "./sessions.js";
-import { isToolActivity, speakableText, summarizeForSpeech } from "./transcript.js";
+import { isToolActivity, speakableText, splitForSpeech, summarizeForSpeech } from "./transcript.js";
 
 /** The subset of a hook payload we rely on. Claude Code sends more; none of it is required. */
 export interface HookPayload {
@@ -52,10 +52,11 @@ export interface ObserverEvents {
 }
 
 /**
- * How much of an assistant turn to speak.
+ * Length of ONE spoken utterance, not of the whole reply.
  *
- * Every text block would be unusable — a long answer read aloud in full is an audiobook, not a
- * status report. The cap is per BLOCK rather than per turn so a short aside is spoken whole.
+ * A long answer is split into several utterances at sentence boundaries and spoken in order. It
+ * used to be truncated here, which meant a listener heard the opening of a report and was never
+ * told the rest existed — detail is not sacrificed for brevity in this project.
  */
 const SPEAK_MAX_CHARS = 320;
 
@@ -100,6 +101,20 @@ export class SessionObserver {
      * show the orb is alive during the silence.
      */
     private narrateSubagents = false;
+    /**
+     * "brief" speaks only the opening of a long reply; "full" speaks all of it, in chunks.
+     *
+     * Full is the default. Verbosity is a setting, not a fixed clip level.
+     */
+    private detail: "brief" | "full" = "full";
+    /**
+     * Sessions Rasputin drives himself.
+     *
+     * A driven session registers in `~/.claude/sessions/` like any other, so without this the
+     * observer narrates the very answer the driver is already speaking — every driven reply is
+     * said twice, in two overlapping voices.
+     */
+    private readonly ownSessions = new Set<string>();
 
     constructor(private readonly events: ObserverEvents) {
         this.tailer.onLines = (ev) => this.onTranscript(ev);
@@ -142,6 +157,20 @@ export class SessionObserver {
         }
     }
 
+    /** Marks a session as one we drive, so it is never narrated a second time. */
+    excludeSession(sessionId: string): void {
+        this.ownSessions.add(sessionId);
+    }
+
+    /** How much of a long reply to speak. */
+    setDetail(detail: "brief" | "full"): void {
+        this.detail = detail;
+    }
+
+    get speechDetail(): "brief" | "full" {
+        return this.detail;
+    }
+
     /** Narrate delegated subagent work as well as the session's own replies. */
     setNarrateSubagents(on: boolean): void {
         this.narrateSubagents = on;
@@ -180,6 +209,7 @@ export class SessionObserver {
      * seen and never move again.
      */
     private accepted(sessionId: string): boolean {
+        if (this.ownSessions.has(sessionId)) return false;
         return this.pinned === null || this.pinned === sessionId;
     }
 
@@ -191,6 +221,7 @@ export class SessionObserver {
      * projects into one voice.
      */
     private narratable(sessionId: string): boolean {
+        if (this.ownSessions.has(sessionId)) return false;
         if (this.pinned !== null) return this.pinned === sessionId;
         return this.focused === null || this.focused.sessionId === sessionId;
     }
@@ -261,10 +292,9 @@ export class SessionObserver {
             this.spoken.add(key);
             if (this.spoken.size > 500) this.spoken.clear();
 
-            const text = summarizeForSpeech(raw, SPEAK_MAX_CHARS);
-            if (text.length < SPEAK_MIN_CHARS) continue;
+            if (raw.length < SPEAK_MIN_CHARS) continue;
             if (latest !== null) dropped++;
-            latest = text;
+            latest = raw;
         }
 
         // Only the most recent message in a batch is spoken.
@@ -275,7 +305,18 @@ export class SessionObserver {
         // is the only one still worth saying out loud.
         if (latest === null) return;
         if (dropped > 0) console.log(`observer: spoke the latest of ${dropped + 1} pending messages`);
-        this.events.say(latest);
+
+        if (this.detail === "brief") {
+            const brief = summarizeForSpeech(latest, SPEAK_MAX_CHARS);
+            if (brief.length >= SPEAK_MIN_CHARS) this.events.say(brief);
+            return;
+        }
+        // Queued in order by the daemon, so a long reply is heard whole rather than clipped.
+        const parts = splitForSpeech(latest, SPEAK_MAX_CHARS);
+        if (parts.length > 1) console.log(`observer: speaking a long reply in ${parts.length} parts`);
+        for (const part of parts) {
+            if (part.length >= SPEAK_MIN_CHARS || parts.length === 1) this.events.say(part);
+        }
     }
 
     /**

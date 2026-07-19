@@ -220,6 +220,16 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   questions — gating hook events on the current focus freezes it on the first session forever.
 - **Speak only the newest message in a batch.** A backlog queues minutes of speech that is stale
   before it is heard.
+- **Long replies are SPLIT, never truncated.** `summarizeForSpeech` clips to a headline and drops
+  the rest, which had a listener hearing the opening of a report with no indication it was
+  abridged. Narration uses `splitForSpeech`, which chunks at sentence boundaries.
+  Verbosity is a setting (`speechDetail`), not a fixed clip level.
+- **A driven session must be excluded from narration.** It registers in `~/.claude/sessions/` like
+  any other, so the observer narrates the answer the driver is already speaking — every driven
+  reply said twice, in two overlapping voices.
+- **The overlay needs `NSMicrophoneUsageDescription` in `Info.plist`.** Without it macOS never
+  prompts and simply denies, so push-to-talk fails silently with no way to grant access afterwards.
+  It lives in `src-tauri/Info.plist`, which Tauri merges into the bundle.
 - **Do not style overlay UI with an injected `<style>` element — use CSSOM.** `<style>` blocks are
   governed by `style-src`, and Tauri rewrites the app CSP with nonces; a nonce makes browsers
   ignore `'unsafe-inline'`, so the block is dropped silently. An unstyled subtitle is a static

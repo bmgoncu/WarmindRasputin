@@ -110,6 +110,37 @@ export function summarizeForSpeech(text: string, maxChars = 320): string {
     return `${(lastSpace > 0 ? window.slice(0, lastSpace) : window).trim()}…`;
 }
 
+/**
+ * Splits a long reply into utterances, rather than throwing the tail away.
+ *
+ * `summarizeForSpeech` truncates, which is right for a headline but wrong for narration: a long
+ * answer was being cut at ~320 characters and the remainder silently dropped, so the listener
+ * heard the opening of a report and never learned it had been abridged. Detail is not sacrificed
+ * for brevity — that was a requirement of this project from the start.
+ *
+ * Chunks break at sentence boundaries where possible, because the voice chain renders each
+ * utterance independently and a chunk ending mid-clause reads as a fault rather than a pause.
+ */
+export function splitForSpeech(text: string, maxChars = 320): string[] {
+    const clean = stripMarkdown(text);
+    if (clean.length <= maxChars) return clean ? [clean] : [];
+
+    const out: string[] = [];
+    let rest = clean;
+    while (rest.length > maxChars) {
+        const window = rest.slice(0, maxChars);
+        const stop = Math.max(window.lastIndexOf(". "), window.lastIndexOf("! "), window.lastIndexOf("? "));
+        // Only take a sentence break if it keeps a useful amount; otherwise fall back to a word
+        // boundary so a single very long sentence still gets divided.
+        let cut = stop > maxChars * 0.35 ? stop + 1 : window.lastIndexOf(" ");
+        if (cut <= 0) cut = maxChars;
+        out.push(rest.slice(0, cut).trim());
+        rest = rest.slice(cut).trim();
+    }
+    if (rest) out.push(rest);
+    return out.filter(Boolean);
+}
+
 /** Parses a JSONL chunk, skipping malformed lines rather than throwing on a partial write. */
 export function parseLines(chunk: string): TranscriptLine[] {
     const out: TranscriptLine[] = [];

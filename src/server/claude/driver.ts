@@ -18,11 +18,19 @@
  */
 
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { speakableText, summarizeForSpeech } from "./transcript.js";
+import { speakableText, splitForSpeech } from "./transcript.js";
 
 export interface DriverEvents {
     /** Speak this. Already stripped of markdown. */
     say: (text: string) => void;
+    /**
+     * The session id the SDK allocated.
+     *
+     * The observer needs it in order to EXCLUDE it: a driven session registers in
+     * `~/.claude/sessions/` like any other, so the observer picks up its transcript and narrates
+     * the same answer the driver is already speaking — every driven reply said twice.
+     */
+    session: (sessionId: string) => void;
     /** Server-driven orb state. */
     state: (state: "idle" | "thinking" | "alert") => void;
     /** Free-form progress for the daemon log. */
@@ -44,7 +52,7 @@ export interface DriverOptions {
     maxTurns?: number;
 }
 
-/** Longest single utterance. Matches the observer, so driven and observed speech sound alike. */
+/** Length of ONE utterance. Long answers are split across several, never truncated. */
 const SPEAK_MAX_CHARS = 320;
 
 /**
@@ -106,6 +114,7 @@ export class ClaudeDriver {
     private session: Query | null = null;
     private queue: MessageQueue | null = null;
     private running = false;
+    private sessionId: string | null = null;
 
     constructor(
         private readonly events: DriverEvents,
@@ -118,6 +127,11 @@ export class ClaudeDriver {
 
     get isOpen(): boolean {
         return this.session !== null;
+    }
+
+    /** Session id allocated by the SDK, once known. */
+    get ownSessionId(): string | null {
+        return this.sessionId;
     }
 
     /**
@@ -171,14 +185,21 @@ export class ClaudeDriver {
     }
 
     private handle(message: SDKMessage): void {
+        const id = (message as { session_id?: string }).session_id;
+        if (id && id !== this.sessionId) {
+            this.sessionId = id;
+            this.events.session(id);
+        }
+
         switch (message.type) {
             case "assistant": {
                 // Reuses the observer's block filter, so the speech policy is defined once: text
                 // blocks are spoken, tool_use and thinking never are.
                 const raw = speakableText(message as never);
                 if (!raw) return;
-                const text = summarizeForSpeech(raw, SPEAK_MAX_CHARS);
-                if (text) this.events.say(text);
+                // Split rather than truncated: a driven answer is the thing the user asked for,
+                // so clipping it is worse here than anywhere else.
+                for (const part of splitForSpeech(raw, SPEAK_MAX_CHARS)) this.events.say(part);
                 return;
             }
             case "result": {

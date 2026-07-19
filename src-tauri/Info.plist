@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Merged into the generated bundle Info.plist by Tauri.
+
+  NSMicrophoneUsageDescription is REQUIRED, not cosmetic: without it macOS never shows the consent
+  prompt and simply denies access, so push-to-talk fails silently with no way to grant it after the
+  fact. The daemon and ffmpeg are child processes of this app, so their microphone use is attributed
+  to this bundle.
+
+  LSUIElement matches ActivationPolicy::Accessory set in lib.rs — declaring it here as well means
+  the app is a menu-bar app from launch rather than briefly showing a Dock icon.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Rasputin listens when you hold the push-to-talk key, so your spoken instructions can be transcribed and sent to Claude.</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>

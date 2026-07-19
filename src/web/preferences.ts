@@ -29,7 +29,7 @@ const DEFAULTS: Required<
     Pick<
         OrbConfig,
         | "idleFloor" | "shakeScale" | "outerRadius" | "joltCount" | "arcCount"
-        | "opaqueBackground" | "subtitles" | "chain" | "narrateSubagents"
+        | "opaqueBackground" | "subtitles" | "chain" | "narrateSubagents" | "speechDetail"
     >
 > = {
     idleFloor: 0.22,
@@ -41,6 +41,7 @@ const DEFAULTS: Required<
     subtitles: true,
     chain: "measured",
     narrateSubagents: false,
+    speechDetail: "full",
 };
 
 /** Fixed line for the Test voice button — long enough to hear the degradation and the ballistics,
@@ -105,6 +106,7 @@ function render(cfg: OrbConfig): void {
     if (cfg.opaqueBackground !== undefined) el.opaque.checked = cfg.opaqueBackground;
     if (cfg.subtitles !== undefined) el.subs.checked = cfg.subtitles;
     if (cfg.chain !== undefined) el.chain.value = cfg.chain;
+    if (cfg.speechDetail !== undefined) $<HTMLSelectElement>("detail").value = cfg.speechDetail;
     if (cfg.narrateSubagents !== undefined) $<HTMLInputElement>("subagents").checked = cfg.narrateSubagents;
     applying = false;
 }
@@ -143,6 +145,9 @@ el.arcs.addEventListener("input", () => push({ arcCount: Number(el.arcs.value) }
 el.opaque.addEventListener("change", () => push({ opaqueBackground: el.opaque.checked }));
 el.subs.addEventListener("change", () => push({ subtitles: el.subs.checked }));
 el.chain.addEventListener("change", () => push({ chain: el.chain.value }));
+$<HTMLSelectElement>("detail").addEventListener("change", (e) =>
+    push({ speechDetail: (e.target as HTMLSelectElement).value as "brief" | "full" }),
+);
 $<HTMLInputElement>("subagents").addEventListener("change", (e) =>
     push({ narrateSubagents: (e.target as HTMLInputElement).checked }),
 );

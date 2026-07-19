@@ -53,6 +53,7 @@ let config: OrbConfig = {
     subtitles: true,
     chain: "measured",
     narrateSubagents: false,
+    speechDetail: "full",
 };
 
 async function loadConfig(): Promise<void> {
@@ -244,6 +245,10 @@ const driver = new ClaudeDriver({
     say: (text) => enqueueSpeech(text),
     state: (state) => broadcast({ type: "state", state }),
     log: (message) => console.log(`driver: ${message}`),
+    session: (sessionId) => {
+        console.log(`driver session ${sessionId.slice(0, 8)} — excluded from narration`);
+        observer.excludeSession(sessionId);
+    },
 });
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -454,6 +459,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                     config = { ...config, ...patch };
                     if ("focusSessionId" in patch) observer.setPinned(patch.focusSessionId ?? null);
                     if ("narrateSubagents" in patch) observer.setNarrateSubagents(patch.narrateSubagents === true);
+                    if (patch.speechDetail) observer.setDetail(patch.speechDetail);
                     void saveConfig();
                     // Back to EVERY renderer including the sender, so the overlay follows the
                     // preferences window and a second preferences window cannot drift.
@@ -476,6 +482,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
     void loadConfig().then(() => {
         observer.setPinned(config.focusSessionId ?? null);
         observer.setNarrateSubagents(config.narrateSubagents === true);
+        observer.setDetail(config.speechDetail ?? "full");
     });
     // The installed hook is the record of consent, so it decides whether narration runs.
     void hookState().then((state) => {

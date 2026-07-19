@@ -103,6 +103,13 @@ export interface OrbConfig {
      * most listeners are waiting for.
      */
     narrateSubagents?: boolean;
+    /**
+     * How much of a long reply to speak.
+     *
+     * "full" splits it into several utterances and speaks all of it; "brief" speaks only the
+     * opening. Full by default — detail is not sacrificed for brevity.
+     */
+    speechDetail?: "brief" | "full";
 }
 
 export interface ConfigMsg extends OrbConfig {

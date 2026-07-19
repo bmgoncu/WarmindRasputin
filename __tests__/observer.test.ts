@@ -328,3 +328,40 @@ describe("subagent narration setting", () => {
         expect(said).toEqual([]);
     });
 });
+
+describe("driven sessions", () => {
+    const DRIVEN = "cccccccc-1111-2222-3333-444444444444";
+
+    it("never narrates a session Rasputin drives himself", () => {
+        // A driven session registers like any other, so without excluding it the observer speaks
+        // the same answer the driver is already speaking — every driven reply said twice.
+        const { obs, said } = makeObserver();
+        obs.excludeSession(DRIVEN);
+        (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({
+            path: `/p/proj/${DRIVEN}.jsonl`,
+            subagent: false,
+            lines: [assistant([{ type: "text", text: "This answer is already being spoken." }], "d")],
+        });
+        expect(said).toEqual([]);
+    });
+
+    it("does not let a driven session take focus", () => {
+        const { obs, focus } = makeObserver();
+        obs.excludeSession(DRIVEN);
+        focus.length = 0;
+        obs.handleHook({ hook_event_name: "UserPromptSubmit", session_id: DRIVEN, cwd: "/p/x" });
+        expect(focus).toHaveLength(0);
+    });
+
+    it("still narrates other sessions normally", () => {
+        const { obs, said } = makeObserver();
+        obs.excludeSession(DRIVEN);
+        obs.handleHook({ session_id: "aaaaaaaa-1111-2222-3333-444444444444", cwd: "/p/one" });
+        (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({
+            path: "/p/proj/aaaaaaaa-1111-2222-3333-444444444444.jsonl",
+            subagent: false,
+            lines: [assistant([{ type: "text", text: "A normal session speaking normally." }], "e")],
+        });
+        expect(said).toEqual(["A normal session speaking normally."]);
+    });
+});
