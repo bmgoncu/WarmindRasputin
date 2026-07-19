@@ -297,3 +297,34 @@ describe("pinning a session", () => {
         expect(focus.at(-1)?.pinned).toBe(true);
     });
 });
+
+describe("subagent narration setting", () => {
+    const sub = (obs: SessionObserver): void =>
+        (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({
+            path: "/p/proj/aaaa-bbbb/subagents/agent-1.jsonl",
+            subagent: true,
+            lines: [assistant([{ type: "text", text: "Delegated work reporting back." }], "s")],
+        });
+
+    it("is off by default", () => {
+        const { obs, said } = makeObserver();
+        expect(obs.isNarratingSubagents).toBe(false);
+        sub(obs);
+        expect(said).toEqual([]);
+    });
+
+    it("narrates delegated work once switched on", () => {
+        const { obs, said } = makeObserver();
+        obs.setNarrateSubagents(true);
+        sub(obs);
+        expect(said).toEqual(["Delegated work reporting back."]);
+    });
+
+    it("goes quiet again when switched back off", () => {
+        const { obs, said } = makeObserver();
+        obs.setNarrateSubagents(true);
+        obs.setNarrateSubagents(false);
+        sub(obs);
+        expect(said).toEqual([]);
+    });
+});

@@ -50,6 +50,7 @@ let config: OrbConfig = {
     opaqueBackground: false,
     subtitles: true,
     chain: "measured",
+    narrateSubagents: false,
 };
 
 async function loadConfig(): Promise<void> {
@@ -289,11 +290,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         res.end(
             JSON.stringify({
                 enabled: observer.isEnabled,
+                subagents: observer.isNarratingSubagents,
                 pinned: observer.pinnedSession,
                 sessions: live.map((entry) => ({
                     sessionId: entry.sessionId,
                     cwd: entry.cwd,
                     project: entry.cwd?.split("/").filter(Boolean).pop(),
+                    name: entry.name,
                     status: entry.status,
                     pid: entry.pid,
                 })),
@@ -364,6 +367,7 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                     const { type: _ignored, ...patch } = parsed;
                     config = { ...config, ...patch };
                     if ("focusSessionId" in patch) observer.setPinned(patch.focusSessionId ?? null);
+                    if ("narrateSubagents" in patch) observer.setNarrateSubagents(patch.narrateSubagents === true);
                     void saveConfig();
                     // Back to EVERY renderer including the sender, so the overlay follows the
                     // preferences window and a second preferences window cannot drift.
@@ -383,7 +387,10 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
         });
     });
 
-    void loadConfig().then(() => observer.setPinned(config.focusSessionId ?? null));
+    void loadConfig().then(() => {
+        observer.setPinned(config.focusSessionId ?? null);
+        observer.setNarrateSubagents(config.narrateSubagents === true);
+    });
     // The installed hook is the record of consent, so it decides whether narration runs.
     void hookState().then((state) => {
         observer.setEnabled(state.installed);

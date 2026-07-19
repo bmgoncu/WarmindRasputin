@@ -104,8 +104,17 @@ export class TranscriptTailer {
      */
     constructor(
         private readonly pollMs = POLL_MS,
-        private readonly followSubagents = true,
+        private followSubagents = true,
     ) {}
+
+    /** Changes subagent following at runtime. Turning it off drops the ones already followed. */
+    setFollowSubagents(on: boolean): void {
+        this.followSubagents = on;
+        if (on) return;
+        for (const path of this.watching) {
+            if (isSubagentPath(path)) this.unfollow(path);
+        }
+    }
 
     /**
      * Starts following a transcript. Safe to call repeatedly with the same path.

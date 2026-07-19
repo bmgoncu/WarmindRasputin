@@ -312,6 +312,10 @@ held to a higher bar than the rest of the project:
 - **The installed hook is also the consent record.** Narration is gated on it, because the daemon
   finds live transcripts from the session registry on its own and would otherwise start narrating
   every session on the machine the moment it launched — with no opt-in anywhere.
+- **The registry's `name` field is the only thing telling two sessions apart.** Eleven live
+  sessions across two projects render as "merge-mogul — idle" over and over without it; with it
+  they are "merge-mogul — LiveOps — idle". The tray uses the name for the same reason, truncated
+  to 22 characters because the menu bar has very little room.
 - **Transcripts are followed from the registry, not only from hook events.** `follow()` starts at
   the current end of file and the daemon restarts on every edit under `tsx watch`, so after a
   restart nothing would be followed until the next hook fired — by which point the assistant text

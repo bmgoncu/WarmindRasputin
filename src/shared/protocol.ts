@@ -96,6 +96,13 @@ export interface OrbConfig {
      * a transient view state.
      */
     focusSessionId?: string | null;
+    /**
+     * Narrate delegated subagent work as well as the session's own replies. Off by default.
+     *
+     * Their output is a different voice reporting internal progress, and it buries the answers
+     * most listeners are waiting for.
+     */
+    narrateSubagents?: boolean;
 }
 
 export interface ConfigMsg extends OrbConfig {
@@ -113,6 +120,8 @@ export interface FocusMsg {
     type: "focus";
     /** Last path component of the cwd — what a person calls the project. */
     project?: string;
+    /** Registry session name, e.g. "LiveOps" — the only thing telling two sessions apart. */
+    name?: string;
     cwd?: string;
     sessionId?: string;
     /** How many live sessions are reporting, so several can be distinguished from one. */

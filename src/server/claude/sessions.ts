@@ -50,6 +50,13 @@ export interface SessionEntry {
     pid: number;
     sessionId: string;
     cwd: string;
+    /**
+     * Human-readable session name from the registry, e.g. "LiveOps" or "IAPProblem".
+     *
+     * The only thing that distinguishes two sessions in the same project — without it a picker
+     * shows "merge-mogul — idle" eleven times over.
+     */
+    name?: string;
     status: "busy" | "idle" | string;
     version?: string;
     updatedAt?: number;

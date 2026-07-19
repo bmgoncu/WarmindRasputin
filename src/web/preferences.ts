@@ -25,7 +25,13 @@ const DAEMON_ORIGIN = inOverlay()
       ? location.origin
       : `http://${location.hostname || "127.0.0.1"}:${DAEMON_PORT}`;
 
-const DEFAULTS: Required<Pick<OrbConfig, "idleFloor" | "shakeScale" | "outerRadius" | "joltCount" | "arcCount" | "opaqueBackground" | "subtitles" | "chain">> = {
+const DEFAULTS: Required<
+    Pick<
+        OrbConfig,
+        | "idleFloor" | "shakeScale" | "outerRadius" | "joltCount" | "arcCount"
+        | "opaqueBackground" | "subtitles" | "chain" | "narrateSubagents"
+    >
+> = {
     idleFloor: 0.22,
     shakeScale: 1,
     outerRadius: 1.78,
@@ -34,6 +40,7 @@ const DEFAULTS: Required<Pick<OrbConfig, "idleFloor" | "shakeScale" | "outerRadi
     opaqueBackground: false,
     subtitles: true,
     chain: "measured",
+    narrateSubagents: false,
 };
 
 /** Fixed line for the Test voice button — long enough to hear the degradation and the ballistics,
@@ -98,6 +105,7 @@ function render(cfg: OrbConfig): void {
     if (cfg.opaqueBackground !== undefined) el.opaque.checked = cfg.opaqueBackground;
     if (cfg.subtitles !== undefined) el.subs.checked = cfg.subtitles;
     if (cfg.chain !== undefined) el.chain.value = cfg.chain;
+    if (cfg.narrateSubagents !== undefined) $<HTMLInputElement>("subagents").checked = cfg.narrateSubagents;
     applying = false;
 }
 
@@ -135,6 +143,9 @@ el.arcs.addEventListener("input", () => push({ arcCount: Number(el.arcs.value) }
 el.opaque.addEventListener("change", () => push({ opaqueBackground: el.opaque.checked }));
 el.subs.addEventListener("change", () => push({ subtitles: el.subs.checked }));
 el.chain.addEventListener("change", () => push({ chain: el.chain.value }));
+$<HTMLInputElement>("subagents").addEventListener("change", (e) =>
+    push({ narrateSubagents: (e.target as HTMLInputElement).checked }),
+);
 el.reset.addEventListener("click", () => push({ ...DEFAULTS }));
 
 /**
@@ -249,6 +260,8 @@ interface LiveSession {
     sessionId: string;
     cwd?: string;
     project?: string;
+    /** Registry session name. Without it, eleven sessions in one project are indistinguishable. */
+    name?: string;
     status: string;
     pid: number;
 }
@@ -271,7 +284,7 @@ async function refreshSessions(): Promise<void> {
     }
     focusSel.disabled = false;
 
-    const key = JSON.stringify([data.pinned, data.sessions.map((s) => [s.sessionId, s.status])]);
+    const key = JSON.stringify([data.pinned, data.sessions.map((s) => [s.sessionId, s.status, s.name])]);
     if (key === lastSessionKey) return;
     lastSessionKey = key;
 
@@ -285,7 +298,9 @@ async function refreshSessions(): Promise<void> {
     for (const s of data.sessions) {
         const opt = document.createElement("option");
         opt.value = s.sessionId;
-        opt.textContent = `${s.project ?? s.cwd ?? s.sessionId.slice(0, 8)} — ${s.status}`;
+        const project = s.project ?? s.cwd ?? "unknown";
+        const name = s.name ?? s.sessionId.slice(0, 8);
+        opt.textContent = `${project} — ${name} — ${s.status}`;
         focusSel.appendChild(opt);
     }
     // A pinned session that is no longer running still needs an entry, or the dropdown would

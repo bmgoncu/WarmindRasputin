@@ -189,12 +189,21 @@ link.onClose = () => {
  * Overlay only — in Chrome there is no tray, and invoking would throw. A second session is shown
  * as a "+n" suffix rather than a list, because the menu bar has room for a word, not an inventory.
  */
-function setTrayLabel(project: string | undefined, sessions: number, pinned: boolean): void {
+function setTrayLabel(
+    project: string | undefined,
+    name: string | undefined,
+    sessions: number,
+    pinned: boolean,
+): void {
     if (!inOverlay()) return;
+    // The session NAME, not the project: several sessions usually share a project, and the name is
+    // the only thing that tells them apart. Truncated because the menu bar has very little room —
+    // "rasputin-warmind-overlay" would crowd out everything to its right.
+    const label = (name ?? project ?? "").slice(0, 22);
     // "Auto" says the target can change under you; a pinned session is named alone because it
     // cannot. The +n count is only meaningful in automatic mode, where the others are candidates.
     const extra = !pinned && sessions > 1 ? ` +${sessions - 1}` : "";
-    const text = project ? `${pinned ? "" : "Auto "}${project}${extra}` : pinned ? "" : "Auto";
+    const text = label ? `${pinned ? "" : "Auto "}${label}${extra}` : pinned ? "" : "Auto";
     const bridge = (window as unknown as { __TAURI__?: { core?: { invoke: (c: string, a?: unknown) => Promise<unknown> } } }).__TAURI__;
     void bridge?.core?.invoke("set_tray_title", { text }).catch(() => undefined);
 }
@@ -259,7 +268,7 @@ link.onMessage = (msg) => {
             // M3 renders speech only; the rest of the state machine lands with the overlay.
             break;
         case "focus":
-            setTrayLabel(msg.project, msg.sessions, msg.pinned === true);
+            setTrayLabel(msg.project, msg.name, msg.sessions, msg.pinned === true);
             break;
         case "config":
             if (msg.idleFloor !== undefined) orb.idleFloor = msg.idleFloor;

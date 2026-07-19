@@ -31,6 +31,8 @@ export interface HookPayload {
 
 export interface FocusInfo {
     project?: string;
+    /** Registry session name, e.g. "LiveOps". */
+    name?: string;
     cwd?: string;
     sessionId?: string;
     sessions: number;
@@ -62,10 +64,13 @@ const SPEAK_MIN_CHARS = 12;
 
 export class SessionObserver {
     // Subagent transcripts are neither followed nor narrated — see the TranscriptTailer doc.
+    // Subagent following starts off and is switched by setNarrateSubagents.
     private readonly tailer = new TranscriptTailer(undefined, false);
     private readonly sessions = new SessionWatcher();
     /** sessionId → cwd, so completion announcements can name the project. */
     private readonly cwdBySession = new Map<string, string>();
+    /** sessionId → registry name, which is what tells two sessions in one project apart. */
+    private readonly nameBySession = new Map<string, string>();
     /** Guards against speaking the same block twice when a line is re-read. */
     private readonly spoken = new Set<string>();
     /** The session we are attached to — the most recent one to show activity. */
@@ -87,6 +92,14 @@ export class SessionObserver {
      * is the opt-in, and it also installs the hook.
      */
     private enabled = false;
+    /**
+     * Whether delegated work is narrated. Off by default.
+     *
+     * A session can spend minutes inside subagents, and their output is a different voice
+     * reporting internal progress — it buries the session's own answers. Tool-call pulses still
+     * show the orb is alive during the silence.
+     */
+    private narrateSubagents = false;
 
     constructor(private readonly events: ObserverEvents) {
         this.tailer.onLines = (ev) => this.onTranscript(ev);
@@ -123,9 +136,20 @@ export class SessionObserver {
         if (!this.enabled) return;
         for (const entry of entries) {
             if (entry.cwd) this.cwdBySession.set(entry.sessionId, entry.cwd);
+            if (entry.name) this.nameBySession.set(entry.sessionId, entry.name);
             const path = await findTranscript(entry.sessionId);
             if (path) await this.tailer.follow(path);
         }
+    }
+
+    /** Narrate delegated subagent work as well as the session's own replies. */
+    setNarrateSubagents(on: boolean): void {
+        this.narrateSubagents = on;
+        this.tailer.setFollowSubagents(on);
+    }
+
+    get isNarratingSubagents(): boolean {
+        return this.narrateSubagents;
     }
 
     /** Turns narration on or off. Off also stops following, so nothing is polled for nothing. */
@@ -214,9 +238,9 @@ export class SessionObserver {
 
     private onTranscript(ev: TailEvent): void {
         if (!this.enabled) return;
-        // Belt and braces: discovery is off, but a subagent path could still be followed if one
-        // were handed over by a hook. Delegated work is never narrated.
-        if (ev.subagent) return;
+        // Checked here as well as at discovery: a subagent path can still arrive via a hook
+        // payload even when discovery is off.
+        if (ev.subagent && !this.narrateSubagents) return;
         // Derived from the path rather than read from the line: subagent transcripts carry no
         // session id of their own, and the parent's uuid is in their directory.
         if (!this.narratable(sessionIdForPath(ev.path))) return;
@@ -276,6 +300,7 @@ export class SessionObserver {
             sessionId,
             cwd: resolved,
             project: resolved ? resolved.split("/").filter(Boolean).pop() : undefined,
+            name: this.nameBySession.get(sessionId),
             sessions: this.liveCount,
             pinned,
         });
