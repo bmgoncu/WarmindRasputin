@@ -32,6 +32,7 @@ import { readSessions } from "./claude/sessions.js";
 import { ClaudeDriver } from "./claude/driver.js";
 import { VoiceInput } from "./voice/listen.js";
 import { allPhrases, phrase } from "./voice/phrases.js";
+import { resolveTarget, typeInto } from "./input/type-into.js";
 import { DAEMON_PORT, isClientMsg, type OrbConfig, type ServerMsg, type SpeakMsg } from "../shared/protocol.js";
 
 const STARTED_AT = new Date().toISOString();
@@ -55,6 +56,8 @@ let config: OrbConfig = {
     chain: "measured",
     narrateSubagents: false,
     speechDetail: "full",
+    dictateMode: "agent",
+    dictateSubmit: true,
 };
 
 async function loadConfig(): Promise<void> {
@@ -248,7 +251,50 @@ async function listenUp(): Promise<void> {
     // releasing the key and hearing anything is where the interface feels dead. This is queued
     // before the agent is even consulted, so it plays while Claude is still thinking.
     enqueueSpeech(phrase("ack"));
+
+    if (config.dictateMode === "type") {
+        await dictateIntoSession(text);
+        return;
+    }
     driver.ask(text);
+}
+
+/**
+ * Types a dictated instruction into the terminal running the chosen session.
+ *
+ * Shown as a caption first and typed only after a pause, so a misheard phrase can be seen — and
+ * focus moved — before any keystrokes are sent. Typing into the wrong window is not undoable.
+ */
+async function dictateIntoSession(text: string): Promise<void> {
+    const wanted = config.focusSessionId ?? lastFocus.sessionId;
+    const live = await readSessions();
+    const session = wanted ? live.find((s) => s.sessionId === wanted) : undefined;
+    if (!session) {
+        console.log("dictate: no target session — pick one in Preferences");
+        enqueueSpeech(phrase("failed"));
+        broadcast({ type: "state", state: "idle" });
+        return;
+    }
+
+    const target = await resolveTarget({ pid: session.pid, cwd: session.cwd });
+    if (target.kind === "none") {
+        console.log(`dictate: ${target.description}`);
+        enqueueSpeech(phrase("failed"));
+        broadcast({ type: "state", state: "idle" });
+        return;
+    }
+
+    console.log(`dictate → ${target.description}: ${text}`);
+    broadcast({ type: "caption", text, holdSec: 3 });
+    // The pause the user asked for: enough to read it and move focus if it is wrong.
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const ok = await typeInto(target, text, config.dictateSubmit !== false);
+    if (!ok) {
+        console.log("dictate: could not type — check Accessibility permission for Rasputin");
+        enqueueSpeech(phrase("failed"));
+    }
+    broadcast({ type: "state", state: "idle" });
 }
 
 const driver = new ClaudeDriver({

@@ -110,6 +110,16 @@ export interface OrbConfig {
      * opening. Full by default — detail is not sacrificed for brevity.
      */
     speechDetail?: "brief" | "full";
+    /**
+     * Where a dictated instruction goes.
+     *
+     * "agent" runs it in Rasputin's own Claude session and speaks the answer. "type" types it into
+     * the terminal actually running the session you selected, as though you had typed it there.
+     * Agent by default — typing moves the keyboard, and that should be chosen deliberately.
+     */
+    dictateMode?: "agent" | "type";
+    /** Send Return after typing. Off leaves the line in the prompt for you to review. */
+    dictateSubmit?: boolean;
 }
 
 export interface ConfigMsg extends OrbConfig {
@@ -139,7 +149,15 @@ export interface FocusMsg {
     dictateTo?: string;
 }
 
-export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg | FocusMsg;
+/** Shows a subtitle without speaking it — used to preview dictation before it is typed. */
+export interface CaptionMsg {
+    type: "caption";
+    text: string;
+    /** Seconds to hold it before fading. */
+    holdSec?: number;
+}
+
+export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg | FocusMsg | CaptionMsg;
 
 // --- renderer → server -------------------------------------------------------------------
 
@@ -242,7 +260,13 @@ export function isServerMsg(v: unknown): v is ServerMsg {
     if (typeof v !== "object" || v === null) return false;
     const t = (v as { type?: unknown }).type;
     return (
-        t === "speak" || t === "state" || t === "stop" || t === "pulse" || t === "config" || t === "focus"
+        t === "speak" ||
+        t === "state" ||
+        t === "stop" ||
+        t === "pulse" ||
+        t === "config" ||
+        t === "focus" ||
+        t === "caption"
     );
 }
 

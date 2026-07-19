@@ -157,7 +157,16 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 - **One assistant response spans multiple JSONL lines** sharing a `message.id`, one per content
   block. Never assume one line = one message.
 - **There is no channel to inject input into a running session** — no FIFOs, no sockets under
-  `~/.claude/`. Driving an agent means owning the process (Agent SDK / CLI).
+  `~/.claude/`. Re-verified: `--remote-control` routes through claude.ai rather than a local API,
+  the SDK's DirectConnect helpers only normalise a remote server URL, and `TIOCSTI` (the ioctl that
+  pushes bytes into a tty's input queue as if typed) is **blocked by macOS with EPERM** even on a
+  pty this process owns. Driving an agent means owning the process; reaching someone else's session
+  means typing into it.
+- **A session's terminal is found via its tty, never by guessing at window titles.** The registry
+  gives a pid, `ps` gives its tty, and Terminal.app exposes `tty of tab` — so a session there is
+  targeted exactly. Rider's embedded terminal is not scriptable per tab, but its window titles
+  carry the project name, so the right window can be raised. Note the process-ancestry walk must
+  read the PARENT's `comm` at each step and skip shells, or it reports `zsh` for everything.
 - **`~/.claude/sessions/<pid>.json`** is a live registry with `cwd`, `sessionId`, and `busy|idle` —
   the trigger for "task complete". Same data from `claude agents --json`, no TTY needed.
 - **Speech policy: speak assistant `text` blocks, never `tool_use` blocks.** No spoken "Read(…)"

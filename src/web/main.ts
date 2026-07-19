@@ -269,6 +269,11 @@ link.onMessage = (msg) => {
             // "waiting on you" cannot be confused with "idle".
             orb.setListening(msg.state === "listening");
             break;
+        case "caption":
+            subtitle.setCues(msg.text);
+            subtitle.update(0);
+            subtitle.hideSoon(msg.holdSec ?? 2);
+            break;
         case "focus":
             setTrayLabel(msg.project, msg.name, msg.sessions, msg.pinned === true);
             break;

@@ -71,6 +71,21 @@
   <p class="hint">Off by default. Delegated work is a different voice reporting internal progress
      and buries the session's own answers — the orb still pulses while it runs.</p>
 
+  <h2>Dictation</h2>
+  <div class="row">
+    <label for="dictate">Voice goes to</label>
+    <select id="dictate">
+      <option value="agent">Rasputin's own session</option>
+      <option value="type">Type into the selected session</option>
+    </select>
+  </div>
+  <p class="hint" id="dictatehint">Agent mode answers aloud. Type mode focuses the terminal running
+     the session chosen above and types your words there, as if you had typed them.</p>
+  <div class="row check">
+    <label for="dictatesubmit">Press Return after typing</label>
+    <input id="dictatesubmit" type="checkbox" checked />
+  </div>
+
   <h2>Startup</h2>
   <div class="row check">
     <label for="autostart">Launch at login</label>
