@@ -123,16 +123,113 @@ spark count. Fast attack, slow release. It reads as a meter, not a mouth.
 
 > *"I can whisper. I can command. And I can speak the old tongue, backwards, as I was made to."*
 
-| Mode | Voice | Character |
-|:--|:--|:--|
-| `warmind` | Tom (Enhanced) | Full roleplay — glitch, bit-crush, bunker echo |
-| `measured` | Tom (Enhanced) | **Default.** Every word legible, the machine still audibly hangs |
-| `plain` | Tom (Enhanced) | Long reports you need to parse |
-| `og-warmind` | Yuri (Enhanced) | Translated to Russian first — the original article |
+Same character, four presentations — only the degradation differs, so it reads as one machine with
+more or less composure, selected per utterance.
 
-`og-warmind` measures a fundamental of **78.6 Hz** against the game reference's 80.5 — the closest
-match in the project. It speaks Russian while the subtitle shows your English, exactly as the game
-does: Rasputin is deliberately unintelligible, and the caption carries the meaning.
+```
+  ┌─ VOICE MODES ───────────────────────────────────────────────┐
+  │ warmind      full roleplay · 7-bit · bunker echo · 20% ring │
+  │ measured  ◆  DEFAULT · glitch on . ! ? · every word legible │
+  │ plain        long reports · 0.6 glitch/s · minimal effects  │
+  │ og-warmind   Russian · Yuri voice · F0 78.6 Hz  (ref: 80.5) │
+  └─────────────────────────────────────────────────────────────┘
+```
+
+`og-warmind` translates your text to Russian and speaks it with the **Yuri** voice, at a fundamental
+of **78.6 Hz** against the game reference's 80.5 — the closest match in the project. The subtitle
+shows your English while the Russian plays, exactly as the game does: Rasputin is deliberately
+unintelligible, and the caption carries the meaning.
+
+---
+
+## ▸ IT WATCHES EVERY SESSION
+
+One user-level hook makes **every** Claude session on the machine report in — any terminal, Rider,
+anywhere. Rasputin narrates the assistant's answers aloud (never the tool calls — those spark the
+orb instead) and announces each completion.
+
+```
+  terminal ──┐
+  Rider ─────┤                        ┌─ narrates the active session
+  terminal ──┼──▶ [ HOOK ] ──▶ daemon ┤    tray:  Auto  LiveOps  +2
+  terminal ──┘        │               └─ sparks on every tool call
+                      └── busy ▶ idle  ▶  "task complete"
+```
+
+Off until you flip it — the switch installs the hook, backs up your settings, and touches nothing
+else. Pin one session, or **follow the active one** (`Auto LiveOps +2` on the tray). Subagent
+chatter stays silent by default.
+
+---
+
+## ▸ SPEAK, AND IT ANSWERS
+
+Hold **⌘⇧Space**. The orb goes dark to show it is listening. Your voice is transcribed **on-device**
+by WhisperKit, then answered aloud by the Agent SDK — or typed straight into the terminal running
+the session you chose.
+
+```
+  ⌘⇧Space           ┌─────────┐   ┌───────────┐    ┌─ AGENT ──▶ answered aloud
+   (hold)  ────────▶ │ ffmpeg  │──▶│ WhisperKit│──▶ │
+   speak…            │ capture │   │ on-device │    └─ TYPE ───▶ your terminal tab
+  (release)          └─────────┘   └───────────┘
+   orb ▶ dark ......... records ....... transcribes ....... routes
+```
+
+There is **no channel to inject input into a running Claude session** — verified three ways. So
+dictation *types*: it maps a session's pid to its tty, finds the exact **Terminal** tab (or the
+right **Rider** window and terminal tab, by name), and sends the keystrokes there.
+
+---
+
+## ▸ THE WARMIND REGISTER
+
+An optional persona for sessions Rasputin drives. Cold, declarative, in character — and written for
+the *ear*: no markdown, no paths spelled letter by letter, numbers spoken plainly. Detail is never
+traded for tone. The same question, register off then on:
+
+```
+  ┌─ REGISTER: OFF — ordinary Claude ────────────────────┐
+  │ "I can't tell without checking — no tools were used, │
+  │  so the daemon's status is unknown."                 │
+  └──────────────────────────────────────────────────────┘
+  ┌─ REGISTER: WARMIND — cold, in-character ───────────────┐
+  │ "Unknown, Guardian. You restricted me from probing,    │
+  │  and daemon state cannot be inferred from a snapshot." │
+  └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ▸ IT SPEAKS THE MACHINE TONGUE
+
+`say` reads "-45 dB" as "dee bee" and attempts "JWT" as a word. A ~180-entry pronunciation map fixes
+it — for the **voice only**. The subtitle keeps "512 MB", which reads better than "512 megabytes" on
+screen.
+
+```
+  ON SCREEN  (subtitle)            SPOKEN ALOUD
+  ─────────────────────────────    ──────────────────────────────────
+  Peak was -45 dB, 512MB      ▶    "minus 45 decibels, 512 megabytes"
+  the JWT in the YAML         ▶    "the J-W-T in the YAM-ul"
+  ~30% faster                 ▶    "approximately 30 percent faster"
+  pushed the repo to prod     ▶    "pushed the repository to production"
+```
+
+---
+
+## ▸ SOUND & SIGNAL
+
+Synthesised, so it ships — no samples, no licensing. An **attention horn** swells when Claude is
+waiting on you. **Arc crackles** fire the instant a spark jumps the lattice. An **ambient bed** hums
+underneath. All of it **ducks** under the voice and returns on its own — a dip, never a mute.
+
+```
+  ambient  ▁▁▁▁▁▂▂▂▃▃▂▂▁▁▁▁▁   bed hum · seamless loop
+  arcs     ·   ··  ·    ·  ··     one-shot · tied to each visual spark
+  horn     ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁        slow menace-swell · when Claude waits
+  ─────────────────────────────   ▼ every bus ducks while Rasputin speaks
+```
 
 ---
 
