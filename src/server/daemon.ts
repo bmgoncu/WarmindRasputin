@@ -490,7 +490,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     res.writeHead(404).end("not found");
 }
 
-export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
+export function start(port = Number(process.env.RASPUTIN_PORT ?? DAEMON_PORT)): ReturnType<typeof createServer> {
     const server = createServer((req, res) => {
         handle(req, res).catch((err) => {
             console.error("request failed:", err);

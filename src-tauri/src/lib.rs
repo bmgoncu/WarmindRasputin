@@ -83,20 +83,44 @@ fn project_root() -> Option<PathBuf> {
 
 /// Starts the daemon if nothing is serving yet.
 ///
-/// Runs the COMPILED `lib/server/daemon.js` rather than going through npm or tsx: a login-launched
-/// app has neither on PATH, and node alone is one fewer thing to locate.
-fn ensure_daemon() -> Option<Child> {
+/// Prefers the daemon BUNDLED in Resources, which is what lets an installed copy run without a
+/// checked-out repo; falls back to the repo build during development. Runs it with node directly
+/// rather than through npm or tsx, since a login-launched app has neither on PATH.
+fn ensure_daemon(app: &tauri::AppHandle) -> Option<Child> {
     if daemon_running() {
         println!("daemon already running — leaving it alone");
         return None;
     }
     let node = find_node()?;
-    let root = project_root()?;
-    let entry = root.join("lib/server/daemon.js");
-    if !entry.is_file() {
-        eprintln!("daemon not built at {} — run: npm run build", entry.display());
-        return None;
-    }
+
+    let bundled = app
+        .path()
+        .resolve("daemon/daemon.mjs", tauri::path::BaseDirectory::Resource)
+        .ok()
+        .filter(|p| p.is_file());
+
+    // An installed app cannot write inside its own bundle, so it works from Application Support
+    // while its read-only data stays in Resources.
+    let (entry, root, assets) = match bundled {
+        Some(entry) => {
+            let assets = entry.parent().map(PathBuf::from);
+            let work = app.path().app_data_dir().unwrap_or_else(|_| {
+                PathBuf::from(std::env::var("HOME").unwrap_or_default())
+                    .join("Library/Application Support/Rasputin")
+            });
+            let _ = std::fs::create_dir_all(&work);
+            (entry, work, assets)
+        }
+        None => {
+            let repo = project_root()?;
+            let entry = repo.join("lib/server/daemon.js");
+            if !entry.is_file() {
+                eprintln!("daemon not built at {} — run: npm run build", entry.display());
+                return None;
+            }
+            (entry, repo, None)
+        }
+    };
     // Log to a file. A GUI app has no console, so a daemon it spawns writes into the void — which
     // made every failure inside it invisible exactly when the app was the thing under test.
     let log_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
@@ -116,15 +140,18 @@ fn ensure_daemon() -> Option<Child> {
     // when that pipe closes, which happens however this process dies — including SIGKILL, where no
     // exit handler runs at all. Relying on the Exit event alone leaked a daemon on every crash or
     // `pkill`, verified.
-    match Command::new(&node)
-        .arg(&entry)
+    let mut cmd = Command::new(&node);
+    cmd.arg(&entry)
         .current_dir(&root)
         .stdin(Stdio::piped())
         .stdout(out)
         .stderr(err)
-        .env("RASPUTIN_PARENT_PIPE", "1")
-        .spawn()
-    {
+        .env("RASPUTIN_PARENT_PIPE", "1");
+    if let Some(dir) = &assets {
+        // Read-only data stays in Resources; the daemon is told where to find it.
+        cmd.env("RASPUTIN_ASSETS_DIR", dir);
+    }
+    match cmd.spawn() {
         Ok(child) => {
             println!("started daemon: {} {}", node.display(), entry.display());
             Some(child)
@@ -279,7 +306,7 @@ pub fn run() {
             // Launch at login has to mean the whole thing works, so the overlay brings the daemon
             // up itself when nothing is serving. Started before the window so the renderer's first
             // connection attempt usually lands.
-            if let Some(child) = ensure_daemon() {
+            if let Some(child) = ensure_daemon(&app.handle().clone()) {
                 *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
             }
 

@@ -1,6 +1,7 @@
 {
   "name": "rasputin-claude-ai",
-  "description": "Warmind voice interface for Claude Code — Rasputin persona, audio-reactive orb overlay, observes and drives Claude sessions.",
+  "version": "0.1.0",
+  "description": "Warmind voice interface for Claude Code \u2014 Rasputin persona, audio-reactive orb overlay, observes and drives Claude sessions.",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,7 +10,9 @@
   "main": "lib/server/daemon.js",
   "scripts": {
     "setup": "./scripts/setup.sh",
+    "release": "./scripts/release.sh",
     "build": "tsc",
+    "bundle:daemon": "node scripts/bundle-daemon.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json",
     "typecheck:web": "tsc -p tsconfig.web.json",
     "build:watch": "tsc --watch",

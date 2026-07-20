@@ -44,6 +44,7 @@ npm run say -- "All systems operational"
 | Run the renderer | `npm run orb` (:7332) |
 | Run the overlay | `npm run overlay` — transparent, always-on-top |
 | Build the overlay app | `npm run overlay:build` |
+| Check and build a release | `npm run release` · `npm run release -- --build` |
 | Render one line and play it | `npm run say -- "some line"` |
 | A/B chain variants vs. the reference | `npm run audition -- "some line"` |
 | Install the observe hook | `npm run hook:install` (prints a diff; add `-- --apply` to write) |
@@ -75,6 +76,7 @@ Rasputin is deliberately unintelligible and the subtitle carries the meaning.
 
 | File | For |
 |---|---|
+| `docs/RELEASE.md` | Building a release, what ships, and the honest signing state |
 | `docs/BUILD.md` | Requirements, every dependency and why, voice decisions with measurements, how it is built |
 | `CLAUDE.md` | Working agreements and the gotcha list — read before changing anything |
 | `~/.claude/plans/cosmic-bouncing-clarke.md` | Full design and milestones |
@@ -83,8 +85,7 @@ Rasputin is deliberately unintelligible and the subtitle carries the meaning.
 
 M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding · M4 overlay shell ·
 M5 observe sessions — **done**.
-M6 drive Claude · M7 persona, skills and agents — **done**. M8 standalone app and release —
-pending.
+M6 drive Claude · M7 persona, skills and agents — **done**. M8 standalone app and release — **done**.
 
 The overlay is a **menu-bar app** — no Dock icon. Its tray glyph carries the menu:
 Show Orb · Interactive · Move Overlay · Preferences… · Quit. Beside the glyph it names the Claude

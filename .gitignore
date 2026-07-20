@@ -24,3 +24,6 @@ samples/
 
 # Tauri generated schemas and build cache (M4). target/ is already ignored above.
 src-tauri/gen/
+
+# Bundled daemon — regenerable via `npm run bundle:daemon`.
+dist-daemon/

@@ -5,9 +5,19 @@
  * which is the correct behaviour before anyone has run the fitter.
  */
 
+import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 
-export const CURVE_PATH = "assets/eq-curve.json";
+/**
+ * Where the fitted curve lives.
+ *
+ * RASPUTIN_ASSETS_DIR is set by the overlay when it runs the bundled daemon: an installed app
+ * cannot write inside its own bundle, so it works from a directory in Application Support while
+ * its read-only data stays in Resources.
+ */
+export const CURVE_PATH = process.env.RASPUTIN_ASSETS_DIR
+    ? join(process.env.RASPUTIN_ASSETS_DIR, "eq-curve.json")
+    : "assets/eq-curve.json";
 
 export interface EqPoint {
     /** Control frequency in Hz. */
