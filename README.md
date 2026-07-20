@@ -147,7 +147,7 @@ by WhisperKit, then answered aloud by the Agent SDK — or typed straight into t
 the session you chose.
 
 ```
-  ⌘⇧Space           ┌─────────┐   ┌───────────┐    ┌─ AGENT ──▶ answered aloud
+  ⌘⇧Space            ┌─────────┐   ┌───────────┐    ┌─ AGENT ──▶ answered aloud
    (hold)  ────────▶ │ ffmpeg  │──▶│ WhisperKit│──▶ │
    speak…            │ capture │   │ on-device │    └─ TYPE ───▶ your terminal tab
   (release)          └─────────┘   └───────────┘
