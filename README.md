@@ -8,6 +8,20 @@
    ██║  ██║██║  ██║███████║██║     ╚██████╔╝   ██║   ██║██║ ╚████║
    ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝      ╚═════╝    ╚═╝   ╚═╝╚═╝  ╚═══╝
         W A R M I N D   ·   V O I C E   I N T E R F A C E
+
+                              ▜█▙▄▖   ▗▄▟█▛
+                             ▀▜██▙▄▄▖   ▗▄▄▟██▛▀
+                                    ◇
+                                  ◇   ◇
+                                ◇       ◇
+                              ◇     ◇     ◇
+                            ◇     ◇   ◇     ◇
+                          ◇     ◇   ◆   ◇     ◇
+                            ◇     ◇   ◇     ◇
+                              ◇     ◇     ◇
+                                ◇       ◇
+                                  ◇   ◇
+                                    ◇
 ```
 
 **A Warmind that watches your Claude Code sessions, speaks in a Russian-accented machine voice,
@@ -18,6 +32,12 @@ and drives its own — floating over your desktop as an audio-reactive orb.**
 ![three](https://img.shields.io/badge/ORB-Three.js-0b0705?style=flat-square&labelColor=c8722e)
 ![typescript](https://img.shields.io/badge/CORE-TypeScript-0b0705?style=flat-square&labelColor=c8722e)
 ![tests](https://img.shields.io/badge/SUBROUTINES-237_passing-0b0705?style=flat-square&labelColor=3a7a3a)
+
+**[▸ DOWNLOAD](https://github.com/bmgoncu/WarmindRasputin/releases)** ·
+[Deploy from source](#-deployment-protocol) ·
+[Manual](docs/GUIDE.md) ·
+[Build notes](docs/BUILD.md) ·
+[Releasing](docs/RELEASE.md)
 
 <br>
 
@@ -135,6 +155,7 @@ Then wake it:
 
 ```bash
 > npm run overlay             # transparent, always-on-top, menu-bar app
+> npm run release -- --build  # produce the signed .app and .dmg for distribution
 ```
 
 Prefer to hear it before anything else? One line, no server:
@@ -142,6 +163,10 @@ Prefer to hear it before anything else? One line, no server:
 ```bash
 > npm run say -- "All systems operational"
 ```
+
+> **Downloading a build?** The app is ad-hoc signed, so Gatekeeper will ask you to confirm the
+> first launch — right-click → **Open**. The full signing/notarisation story, and everything that
+> ships versus stays a prerequisite, is in **[`docs/RELEASE.md`](docs/RELEASE.md)**.
 
 **Requires macOS.** The voice pipeline is built on `say`, which has no equivalent elsewhere. `ffmpeg`,
 `rubberband`, `whisperkit-cli`, and the Enhanced voices are prerequisites — the setup script checks
@@ -200,15 +225,17 @@ matching-EQ derivation and the ambient bed need it; everything else works, and s
 <div align="center">
 
 ```
-              ╲╲╲                        ╱╱╱
-            ╲╲╲╲╲▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁╱╱╱╱╱
-                 ╲                     ╱
-                  ╲       ◆◆◆◆◆       ╱
-                   ╲     ◆     ◆     ╱
-                    ╲     ◆◆◆◆◆     ╱
-                     ╲     ◆◆◆     ╱
-                      ╲▁▁▁▁◆◆◆▁▁▁▁╱
-                            ◆
+                    ◇
+                  ◇   ◇
+                ◇       ◇
+              ◇     ◇     ◇
+            ◇     ◇   ◇     ◇
+          ◇     ◇   ◆   ◇     ◇
+            ◇     ◇   ◇     ◇
+              ◇     ◇     ◇
+                ◇       ◇
+                  ◇   ◇
+                    ◇
 ```
 
 > *"Compliance. I am Rasputin. I am awake. And I am watching."*
