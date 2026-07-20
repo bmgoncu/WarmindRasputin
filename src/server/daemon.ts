@@ -246,7 +246,10 @@ async function listenUp(): Promise<void> {
         broadcast({ type: "state", state: "idle" });
         return;
     }
-    console.log(`heard: ${text}`);
+    console.log(`heard (${config.dictateMode === "type" ? "type" : "agent"} mode): ${text}`);
+    // Always shown, whatever happens to it next. Seeing what was heard is how a misheard phrase is
+    // caught, and that matters as much when the text goes to the agent as when it is typed.
+    broadcast({ type: "caption", text, holdSec: 4 });
     // Answered locally and immediately. A round trip to the agent is seconds, and the gap between
     // releasing the key and hearing anything is where the interface feels dead. This is queued
     // before the agent is even consulted, so it plays while Claude is still thinking.
@@ -285,7 +288,6 @@ async function dictateIntoSession(text: string): Promise<void> {
     }
 
     console.log(`dictate → ${target.description}: ${text}`);
-    broadcast({ type: "caption", text, holdSec: 3 });
     // The pause the user asked for: enough to read it and move focus if it is wrong.
     await new Promise((r) => setTimeout(r, 1200));
 

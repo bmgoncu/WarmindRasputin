@@ -37,6 +37,15 @@ export class SpeechPlayer {
     private playing: Playing | null = null;
     private buffers = new Map<string, AudioBuffer>();
     private onsetCursor = 0;
+    /**
+     * Utterances waiting their turn.
+     *
+     * The daemon serialises RENDERING, not playback — it broadcasts as soon as the audio exists,
+     * which is far faster than speaking it. Playing each arrival immediately meant every message
+     * cut off the one before: a long reply split into four parts was heard as four beginnings.
+     * Playback order and timing belong here, where the audio clock is.
+     */
+    private queue: { msg: SpeakMsg; base: string }[] = [];
 
     /** Fired when audio actually starts and when it ends — the authoritative speaking signal. */
     onPhase: ((id: string, phase: "started" | "ended", latency: number) => void) | null = null;
@@ -82,8 +91,31 @@ export class SpeechPlayer {
         return buf;
     }
 
-    /** Fetches, decodes and schedules an utterance. Any current one is cut off. */
+    /**
+     * Queues an utterance, or plays it now if nothing is speaking.
+     *
+     * Never interrupts. An interrupt is `stop()`, which is a deliberate act; arriving audio is not.
+     */
     async play(msg: SpeakMsg, base: string): Promise<void> {
+        if (this.playing) {
+            this.queue.push({ msg, base });
+            return;
+        }
+        await this.playNow(msg, base);
+    }
+
+    /** Starts the next queued utterance, if any. */
+    private next(): void {
+        const item = this.queue.shift();
+        if (item) void this.playNow(item.msg, item.base).catch(() => this.next());
+    }
+
+    /** Number of utterances waiting, for diagnostics. */
+    get queued(): number {
+        return this.queue.length;
+    }
+
+    private async playNow(msg: SpeakMsg, base: string): Promise<void> {
         const ctx = this.context();
         if (ctx.state !== "running") {
             // A rejected resume must NOT abort playback. Without a user gesture the context stays
@@ -98,7 +130,7 @@ export class SpeechPlayer {
         }
 
         const buffer = await this.load(msg.audioUrl, base);
-        this.stop();
+        this.stopCurrent();
 
         const source = ctx.createBufferSource();
         source.buffer = buffer;
@@ -117,6 +149,9 @@ export class SpeechPlayer {
             if (this.playing?.id === msg.id) {
                 this.playing = null;
                 this.onPhase?.(msg.id, "ended", ctx.outputLatency ?? 0);
+                // Only now does the next one begin — this is what makes utterances follow each
+                // other rather than overlap.
+                this.next();
             }
         };
         this.onPhase?.(msg.id, "started", ctx.outputLatency ?? 0);
@@ -125,7 +160,13 @@ export class SpeechPlayer {
         }
     }
 
+    /** Abandons everything, queue included. Used for a deliberate interrupt. */
     stop(): void {
+        this.queue.length = 0;
+        this.stopCurrent();
+    }
+
+    private stopCurrent(): void {
         if (!this.playing) return;
         // onended would otherwise fire for the utterance we are replacing and null out the new one.
         this.playing.source.onended = null;

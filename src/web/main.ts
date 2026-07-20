@@ -387,6 +387,7 @@ if (overlayActive) console.log("running as overlay — Cmd+Shift+R toggles inter
     connected: link.connected,
     unlocked: player.unlocked,
     speaking: player.speaking,
+    queued: player.queued,
     level: player.sample(),
     progress: player.progress,
     text: player.currentText,
