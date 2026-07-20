@@ -29,7 +29,7 @@ const DEFAULTS: Required<
     Pick<
         OrbConfig,
         | "idleFloor" | "shakeScale" | "outerRadius" | "joltCount" | "arcCount"
-        | "opaqueBackground" | "subtitles" | "chain" | "narrateSubagents" | "speechDetail" | "dictateMode" | "dictateSubmit"
+        | "opaqueBackground" | "subtitles" | "chain" | "narrateSubagents" | "speechDetail" | "dictateMode" | "dictateSubmit" | "persona"
     >
 > = {
     idleFloor: 0.22,
@@ -42,6 +42,7 @@ const DEFAULTS: Required<
     chain: "measured",
     narrateSubagents: false,
     speechDetail: "full",
+    persona: false,
     dictateMode: "agent",
     dictateSubmit: true,
 };
@@ -120,6 +121,7 @@ function render(cfg: OrbConfig): void {
     if (cfg.opaqueBackground !== undefined) el.opaque.checked = cfg.opaqueBackground;
     if (cfg.subtitles !== undefined) el.subs.checked = cfg.subtitles;
     if (cfg.chain !== undefined) el.chain.value = cfg.chain;
+    if (cfg.persona !== undefined) $<HTMLInputElement>("persona").checked = cfg.persona;
     if (cfg.dictateMode !== undefined) $<HTMLSelectElement>("dictate").value = cfg.dictateMode;
     if (cfg.dictateSubmit !== undefined) $<HTMLInputElement>("dictatesubmit").checked = cfg.dictateSubmit;
     if (cfg.speechDetail !== undefined) $<HTMLSelectElement>("detail").value = cfg.speechDetail;
@@ -161,6 +163,9 @@ el.arcs.addEventListener("input", () => push({ arcCount: Number(el.arcs.value) }
 el.opaque.addEventListener("change", () => push({ opaqueBackground: el.opaque.checked }));
 el.subs.addEventListener("change", () => push({ subtitles: el.subs.checked }));
 el.chain.addEventListener("change", () => push({ chain: el.chain.value }));
+$<HTMLInputElement>("persona").addEventListener("change", (e) =>
+    push({ persona: (e.target as HTMLInputElement).checked }),
+);
 $<HTMLSelectElement>("dictate").addEventListener("change", (e) =>
     push({ dictateMode: (e.target as HTMLSelectElement).value as "agent" | "type" }),
 );

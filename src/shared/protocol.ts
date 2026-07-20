@@ -117,6 +117,14 @@ export interface OrbConfig {
      * the terminal actually running the session you selected, as though you had typed it there.
      * Agent by default — typing moves the keyboard, and that should be chosen deliberately.
      */
+    /**
+     * Speak driven answers in the Warmind register.
+     *
+     * Off by default: it changes how an agent phrases everything it tells you, and that should be
+     * chosen rather than arrive as a surprise. Applies only to sessions Rasputin drives — narration
+     * reads someone else's words, and rewriting those would misreport what they said.
+     */
+    persona?: boolean;
     dictateMode?: "agent" | "type";
     /** Send Return after typing. Off leaves the line in the prompt for you to review. */
     dictateSubmit?: boolean;

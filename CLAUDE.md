@@ -328,7 +328,7 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 
 ## Agents / skills
 
-Built alongside the milestones (M7):
+Written in M7 and kept current:
 
 - `.claude/skills/orb-visual/` — lattice construction rules, bloom/ACES setup, what the reference
   actually shows.
@@ -336,3 +336,8 @@ Built alongside the milestones (M7):
 - `.claude/skills/warmind-protocol/` — the `ServerMsg`/`ClientMsg` union and how to extend it.
 - `.claude/agents/shader-smith.md` — GLSL specialist.
 - `.claude/agents/voice-tuner.md` — renders candidate chains and reports on character.
+
+**Persona lives in `src/server/claude/persona.ts`** and is appended to the built-in prompt, never
+replacing it — discarding the preset would leave an agent that speaks in character but cannot use
+tools. It applies to DRIVEN sessions only: narration reads someone else's words, and rewriting those
+would misreport what they said. Off by default, since it changes how everything is phrased.

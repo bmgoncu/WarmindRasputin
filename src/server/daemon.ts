@@ -56,6 +56,7 @@ let config: OrbConfig = {
     chain: "measured",
     narrateSubagents: false,
     speechDetail: "full",
+    persona: false,
     dictateMode: "agent",
     dictateSubmit: true,
 };
@@ -544,7 +545,11 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
                     config = { ...config, ...patch };
                     if ("focusSessionId" in patch) observer.setPinned(patch.focusSessionId ?? null);
                     if ("narrateSubagents" in patch) observer.setNarrateSubagents(patch.narrateSubagents === true);
-                    if (patch.speechDetail) observer.setDetail(patch.speechDetail);
+                    if ("persona" in patch) driver.setPersona(patch.persona === true);
+                    if (patch.speechDetail) {
+                        observer.setDetail(patch.speechDetail);
+                        driver.setDetail(patch.speechDetail);
+                    }
                     void saveConfig();
                     // Back to EVERY renderer including the sender, so the overlay follows the
                     // preferences window and a second preferences window cannot drift.
@@ -568,6 +573,8 @@ export function start(port = DAEMON_PORT): ReturnType<typeof createServer> {
         observer.setPinned(config.focusSessionId ?? null);
         observer.setNarrateSubagents(config.narrateSubagents === true);
         observer.setDetail(config.speechDetail ?? "full");
+        driver.setDetail(config.speechDetail ?? "full");
+        driver.setPersona(config.persona === true);
     });
     // The installed hook is the record of consent, so it decides whether narration runs.
     void hookState().then((state) => {

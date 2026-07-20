@@ -19,6 +19,7 @@
 
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { speakableText, splitForSpeech } from "./transcript.js";
+import { personaPrompt } from "./persona.js";
 
 export interface DriverEvents {
     /** Speak this. Already stripped of markdown. */
@@ -50,6 +51,10 @@ export interface DriverOptions {
     permissionMode?: Options["permissionMode"];
     /** Cap on assistant turns per request, so a runaway loop cannot talk indefinitely. */
     maxTurns?: number;
+    /** Reply length, matching the speechDetail setting. */
+    detail?: "brief" | "full";
+    /** Speak in the Warmind register. Off by default. */
+    persona?: boolean;
 }
 
 /** Length of ONE utterance. Long answers are split across several, never truncated. */
@@ -116,12 +121,16 @@ export class ClaudeDriver {
     private running = false;
     private sessionId: string | null = null;
     private cwd: string;
+    private detail: "brief" | "full" = "full";
+    private persona = false;
 
     constructor(
         private readonly events: DriverEvents,
         private readonly opts: DriverOptions = {},
     ) {
         this.cwd = opts.cwd ?? process.cwd();
+        this.detail = opts.detail ?? "full";
+        this.persona = opts.persona ?? false;
     }
 
     get isRunning(): boolean {
@@ -160,6 +169,20 @@ export class ClaudeDriver {
         return this.cwd;
     }
 
+    /** Reply length. Changing it restarts the session, since the prompt is fixed at start. */
+    setDetail(detail: "brief" | "full"): void {
+        if (detail === this.detail) return;
+        this.detail = detail;
+        if (this.session) this.close();
+    }
+
+    /** Warmind register on or off. Restarts the session for the same reason. */
+    setPersona(on: boolean): void {
+        if (on === this.persona) return;
+        this.persona = on;
+        if (this.session) this.close();
+    }
+
     /**
      * Sends a request, starting the session on first use.
      *
@@ -181,6 +204,18 @@ export class ClaudeDriver {
             prompt: queue,
             options: {
                 cwd: this.cwd,
+                // Appended rather than replacing: the built-in prompt carries the tool contracts,
+                // and discarding it would leave an agent that speaks in character but cannot work.
+                // Omitted entirely when off, so the default behaviour is ordinary Claude.
+                ...(this.persona
+                    ? {
+                          systemPrompt: {
+                              type: "preset" as const,
+                              preset: "claude_code" as const,
+                              append: personaPrompt({ detail: this.detail }),
+                          },
+                      }
+                    : {}),
                 ...(this.opts.model ? { model: this.opts.model } : {}),
                 permissionMode: this.opts.permissionMode ?? "default",
                 maxTurns: this.opts.maxTurns ?? 24,
