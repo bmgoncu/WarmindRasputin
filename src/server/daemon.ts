@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 
 import { synthesize } from "./voice/synth.js";
+import { pronounce } from "./voice/pronounce.js";
 import { extractTimeline, toWire } from "./audio/timeline.js";
 import { getChain } from "./voice/chains.js";
 import { translate } from "./voice/translate.js";
@@ -162,7 +163,10 @@ export async function speak(text: string, chain = "measured"): Promise<SpeakMsg>
         console.log(`translated${t.cached ? " (cached)" : ""}: ${text} -> ${spoken}`);
     }
 
-    const result = await synthesize({ text: spoken, chain, cacheDir: CACHE_DIR });
+    // Expanded for the synthesiser only. The caption keeps the original, because "512 MB" reads
+    // better than "512 megabytes" on screen — see SpeakMsg.sourceText.
+    const voiced = pronounce(spoken);
+    const result = await synthesize({ text: voiced, chain, cacheDir: CACHE_DIR });
     const timeline = extractTimeline(result.samples, result.sampleRate);
     const msg: SpeakMsg = {
         type: "speak",
@@ -171,7 +175,8 @@ export async function speak(text: string, chain = "measured"): Promise<SpeakMsg>
         timeline: toWire(timeline),
         // What was SPOKEN, not what was typed.
         text: spoken,
-        // Kept separately so subtitles can show the meaning rather than the phonetics.
+        // Kept separately so subtitles can show the meaning rather than the phonetics. Also how
+        // the caption avoids the pronunciation expansion applied to `voiced`.
         sourceText: spoken === text ? undefined : text,
         chain,
     };

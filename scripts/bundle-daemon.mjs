@@ -38,6 +38,8 @@ const result = await build({
 
 // The fitted EQ curve is data the voice chain reads at render time, not code.
 await copyFile("assets/eq-curve.json", "dist-daemon/eq-curve.json");
+// The pronunciation map is data too, and speech is noticeably worse without it.
+await copyFile("assets/speech-map.json", "dist-daemon/speech-map.json");
 
 const bytes = Object.values(result.metafile.outputs)[0]?.bytes ?? 0;
 console.log(`  dist-daemon/daemon.mjs  ${(bytes / 1024 / 1024).toFixed(1)} MB`);

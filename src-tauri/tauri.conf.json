@@ -40,7 +40,8 @@
     "resources": {
       "icons/tray-template.png": "icons/tray-template.png",
       "../dist-daemon/daemon.mjs": "daemon/daemon.mjs",
-      "../dist-daemon/eq-curve.json": "daemon/eq-curve.json"
+      "../dist-daemon/eq-curve.json": "daemon/eq-curve.json",
+      "../dist-daemon/speech-map.json": "daemon/speech-map.json"
     },
     "macOS": {
       "minimumSystemVersion": "10.15"
