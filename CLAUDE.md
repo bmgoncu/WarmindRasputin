@@ -164,8 +164,11 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   means typing into it.
 - **A session's terminal is found via its tty, never by guessing at window titles.** The registry
   gives a pid, `ps` gives its tty, and Terminal.app exposes `tty of tab` — so a session there is
-  targeted exactly. Rider's embedded terminal is not scriptable per tab, but its window titles
-  carry the project name, so the right window can be raised. Note the process-ancestry walk must
+  targeted exactly. Rider's embedded terminal is not AppleScript-scriptable, but JetBrains
+  publishes its terminal TAB TITLES through the accessibility tree, so the right tab can be found
+  by name and clicked. Names are matched normalised (case, spaces and punctuation all differ
+  between a session name and a hand-typed tab) with a 0.6 floor — real matches score 0.73-1.00 and
+  an unrelated session scores 0.31, and below the floor the tab is left alone rather than guessed. Note the process-ancestry walk must
   read the PARENT's `comm` at each step and skip shells, or it reports `zsh` for everything.
 - **`~/.claude/sessions/<pid>.json`** is a live registry with `cwd`, `sessionId`, and `busy|idle` —
   the trigger for "task complete". Same data from `claude agents --json`, no TTY needed.

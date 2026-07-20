@@ -276,7 +276,7 @@ async function dictateIntoSession(text: string): Promise<void> {
         return;
     }
 
-    const target = await resolveTarget({ pid: session.pid, cwd: session.cwd });
+    const target = await resolveTarget({ pid: session.pid, cwd: session.cwd, name: session.name });
     if (target.kind === "none") {
         console.log(`dictate: ${target.description}`);
         enqueueSpeech(phrase("failed"));

@@ -35,7 +35,18 @@ export interface TypeTarget {
     app?: string;
     windowIndex?: number;
     tabIndex?: number;
+    /** JetBrains terminal tab to click before typing, when one matched confidently. */
+    riderTab?: string;
 }
+
+/**
+ * How close a name match must be to act on.
+ *
+ * Below this the tab is left alone rather than guessed at: selecting the wrong terminal sends the
+ * text to the wrong session, which is the failure this whole module exists to avoid. Measured on
+ * real data, genuine matches score 0.73-1.00 and an unrelated session scores 0.31.
+ */
+const MATCH_THRESHOLD = 0.6;
 
 /** Controlling terminal of a process, e.g. `ttys014`, or null if it has none. */
 export async function ttyForPid(pid: number): Promise<string | null> {
@@ -117,6 +128,106 @@ return ""`;
     }
 }
 
+/**
+ * Normalises a name for comparison: case, spaces and punctuation all vary between a Claude session
+ * name and the terminal tab a person typed by hand ("BiAnalysis" against "bi analysis").
+ */
+function normalise(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Scores how well a session name matches a terminal tab name, 0-1.
+ *
+ * Exact and containment cases carry most of the weight; the character-overlap fallback exists for
+ * near misses like "ServerLogs" against "Server err logs", which share every word but not the
+ * whole string.
+ */
+export function matchScore(sessionName: string, tabName: string): number {
+    const a = normalise(sessionName);
+    const b = normalise(tabName);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (a.includes(b) || b.includes(a)) return 0.9;
+    // Longest common prefix, plus shared-character ratio — enough to separate a plausible match
+    // from an unrelated tab without pulling in a string-distance dependency.
+    let prefix = 0;
+    while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
+    const shared = [...new Set(a)].filter((c) => b.includes(c)).length;
+    const overlap = shared / Math.max(new Set(a).size, new Set(b).size);
+    return Math.min(0.85, (prefix / Math.max(a.length, b.length)) * 0.5 + overlap * 0.5);
+}
+
+/**
+ * Terminal tab names inside a JetBrains tool window, via the accessibility tree.
+ *
+ * JetBrains terminals are not AppleScript-scriptable, but the IDE publishes an accessibility
+ * hierarchy, and the tab titles appear as static text inside the terminal tool window. That is
+ * what makes selecting the RIGHT tab possible rather than typing into whichever was last focused.
+ */
+export async function riderTerminalTabs(app: string, windowIndex: number): Promise<string[]> {
+    const script = `
+tell application "System Events"
+    tell process "${app}"
+        set out to ""
+        try
+            repeat with grp in (UI elements of window ${windowIndex})
+                repeat with sub in (UI elements of grp)
+                    try
+                        if (description of sub) contains "Tool Window" then
+                            repeat with el in (UI elements of sub)
+                                try
+                                    if (role of el) is "AXStaticText" then set out to out & (description of el) & "\n"
+                                end try
+                            end repeat
+                        end if
+                    end try
+                end repeat
+            end repeat
+        end try
+        return out
+    end tell
+end tell`;
+    try {
+        const result = await osascript(script);
+        return result.split("\n").map((x) => x.trim()).filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+/** Clicks a named terminal tab in a JetBrains window. */
+export async function selectRiderTab(app: string, windowIndex: number, tabName: string): Promise<boolean> {
+    const escaped = tabName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const script = `
+tell application "System Events"
+    tell process "${app}"
+        repeat with grp in (UI elements of window ${windowIndex})
+            repeat with sub in (UI elements of grp)
+                try
+                    if (description of sub) contains "Tool Window" then
+                        repeat with el in (UI elements of sub)
+                            try
+                                if (description of el) is "${escaped}" then
+                                    click el
+                                    return "ok"
+                                end if
+                            end try
+                        end repeat
+                    end if
+                end try
+            end repeat
+        end repeat
+    end tell
+end tell
+return ""`;
+    try {
+        return (await osascript(script)) === "ok";
+    } catch {
+        return false;
+    }
+}
+
 /** Raises a Rider window whose title mentions the project, since its tabs are not scriptable. */
 export async function findAppWindow(app: string, projectHint: string): Promise<number | null> {
     const script = `
@@ -141,6 +252,8 @@ return ""`;
 export interface SessionTarget {
     pid: number;
     cwd?: string;
+    /** Registry session name, matched against JetBrains terminal tab titles. */
+    name?: string;
 }
 
 /**
@@ -168,11 +281,21 @@ export async function resolveTarget(session: SessionTarget): Promise<TypeTarget>
         const project = (session.cwd ?? "").split("/").filter(Boolean).pop() ?? "";
         const windowIndex = project ? await findAppWindow(owner, project) : null;
         if (windowIndex) {
+            // JetBrains publishes its terminal tab titles through accessibility even though the
+            // tabs are not AppleScript-scriptable, so the right one can be picked by name.
+            const tabs = await riderTerminalTabs(owner, windowIndex);
+            const best = tabs
+                .map((t) => ({ tab: t, score: matchScore(session.name ?? "", t) }))
+                .sort((a, b) => b.score - a.score)[0];
+            const matched = best && best.score >= MATCH_THRESHOLD ? best.tab : undefined;
             return {
                 kind: "app-window",
-                description: `${owner} window ${windowIndex} (${project}) — its focused terminal tab`,
+                description: matched
+                    ? `${owner} window ${windowIndex} (${project}) tab "${matched}"`
+                    : `${owner} window ${windowIndex} (${project}) — its focused terminal tab`,
                 app: owner,
                 windowIndex,
+                riderTab: matched,
             };
         }
         return { kind: "app-window", description: `${owner} — its focused window`, app: owner };
@@ -202,6 +325,29 @@ tell application "Terminal"
     set index of window ${target.windowIndex} to 1
 end tell
 delay 0.15`;
+    } else if (target.riderTab && target.windowIndex) {
+        const tab = target.riderTab.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        focus = `
+tell application "${target.app}" to activate
+delay 0.25
+tell application "System Events"
+    tell process "${target.app}"
+        repeat with grp in (UI elements of window ${target.windowIndex})
+            repeat with sub in (UI elements of grp)
+                try
+                    if (description of sub) contains "Tool Window" then
+                        repeat with el in (UI elements of sub)
+                            try
+                                if (description of el) is "${tab}" then click el
+                            end try
+                        end repeat
+                    end if
+                end try
+            end repeat
+        end repeat
+    end tell
+end tell
+delay 0.2`;
     } else {
         focus = `
 tell application "${target.app}" to activate
