@@ -159,9 +159,13 @@ describe("task completion", () => {
         (obs as unknown as { onSessionChange: (c: unknown) => void }).onSessionChange(c);
 
     it("announces completion on busy -> idle, naming the project", () => {
+        // The exact wording varies — completionPhrase draws from several Warmind-register lines —
+        // so this asserts the project is named rather than pinning one phrasing.
         const { obs, said, states } = makeObserver();
         fire(obs, change("busy", "idle"));
-        expect(said).toEqual(["Task complete. merge-mogul."]);
+        expect(said).toHaveLength(1);
+        expect(said[0]).toContain("merge-mogul");
+        expect(said[0]).not.toContain("{");
         expect(states).toContain("idle");
     });
 
