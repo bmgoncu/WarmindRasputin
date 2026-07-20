@@ -46,9 +46,21 @@ const DEFAULTS: Required<
     dictateSubmit: true,
 };
 
-/** Fixed line for the Test voice button — long enough to hear the degradation and the ballistics,
- *  short enough to re-trigger while dragging a slider. */
-const TEST_LINE = "I am Rasputin, the Warmind! At your service!";
+/**
+ * What the Test voice button says.
+ *
+ * The first line is the character check — long enough to hear the degradation and the ballistics.
+ * The three that follow are queued behind it deliberately: they exercise the two things that were
+ * broken and are easy to regress. Utterances must follow one another rather than cutting each
+ * other off, and the subtitle must track whichever is CURRENTLY being spoken rather than the last
+ * one to arrive. Distinct, ordered words make both audible and visible at a glance.
+ */
+const TEST_LINES = [
+    "I am Rasputin, the Warmind! At your service!",
+    "Alpha one, the first utterance.",
+    "Bravo two, the second utterance.",
+    "Charlie three, the third utterance.",
+];
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -171,20 +183,30 @@ el.reset.addEventListener("click", () => push({ ...DEFAULTS }));
  * being heard rather than whatever the daemon last persisted.
  */
 el.test.addEventListener("click", () => {
-    const sent = link.send({ type: "say", text: TEST_LINE, chain: el.chain.value });
+    // Sent as separate utterances rather than one long line: queueing is the behaviour under test,
+    // and a single message would never exercise it.
+    let sent = true;
+    for (const line of TEST_LINES) {
+        if (!link.send({ type: "say", text: line, chain: el.chain.value })) sent = false;
+    }
     if (!sent) {
         el.testHint.textContent = "daemon offline";
         return;
     }
-    el.testHint.textContent =
-        el.chain.value === "og-warmind" ? "translating, first time is slow…" : "speaking…";
+    const slow = el.chain.value === "og-warmind";
+    el.testHint.textContent = slow
+        ? "translating four lines, first time is slow…"
+        : "speaking four lines — each should finish before the next begins";
     el.test.disabled = true;
     // No completion signal reaches this window — playback is reported by the renderer that owns
     // the audio, not by this one — so the button re-arms on a timer rather than pretending to know.
-    window.setTimeout(() => {
-        el.test.disabled = false;
-        el.testHint.textContent = "";
-    }, el.chain.value === "og-warmind" ? 5000 : 2600);
+    window.setTimeout(
+        () => {
+            el.test.disabled = false;
+            el.testHint.textContent = "";
+        },
+        slow ? 22000 : 14000,
+    );
 });
 
 // --- native window geometry ---------------------------------------------------------------

@@ -54,7 +54,20 @@ export function phrase(kind: PhraseKind): string {
     return chosen;
 }
 
+/**
+ * Lines the Test voice button speaks.
+ *
+ * Kept here so they are warmed with everything else — the button exists to check the queue and the
+ * subtitle, and waiting several seconds for a cold render obscures both.
+ */
+export const TEST_LINES = [
+    "I am Rasputin, the Warmind! At your service!",
+    "Alpha one, the first utterance.",
+    "Bravo two, the second utterance.",
+    "Charlie three, the third utterance.",
+];
+
 /** Every line, for pre-rendering. */
 export function allPhrases(): string[] {
-    return Object.values(PHRASES).flat();
+    return [...Object.values(PHRASES).flat(), ...TEST_LINES];
 }
