@@ -267,6 +267,12 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   seven ffmpeg filters missing from a build that had them — and only the ones early in the
   alphabetical listing, because late matches let grep drain the output first. Capture once into a
   variable, then grep that.
+- **When the app spawns the daemon, its log goes to `~/Library/Logs/Rasputin/daemon.log`.** A GUI
+  app has no console, so a daemon it starts writes into the void — which made every failure inside
+  it invisible exactly when the app was the thing under test. Check that file, not the terminal.
+- **Resolve `ffmpeg`, `whisperkit-cli` and `node` by absolute path.** An app launched from Finder or
+  at login inherits `/usr/bin:/bin:/usr/sbin:/sbin` with no Homebrew; it only finds them when
+  started from a shell, which is exactly the case that is not tested.
 - **A running daemon does not pick up server-side edits — `npm run daemon` uses `tsx watch`.**
   Plain `tsx` has no reload, and a stale daemon answers every request normally while serving old
   code, so a fix appears not to work. `GET /health` reports `startedAt` and `pid`; compare it

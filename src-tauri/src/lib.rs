@@ -97,6 +97,21 @@ fn ensure_daemon() -> Option<Child> {
         eprintln!("daemon not built at {} — run: npm run build", entry.display());
         return None;
     }
+    // Log to a file. A GUI app has no console, so a daemon it spawns writes into the void — which
+    // made every failure inside it invisible exactly when the app was the thing under test.
+    let log_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+        .join("Library/Logs/Rasputin");
+    let _ = std::fs::create_dir_all(&log_path);
+    let log_file = log_path.join("daemon.log");
+    let (out, err) = match std::fs::OpenOptions::new().create(true).append(true).open(&log_file) {
+        Ok(f) => {
+            let dup = f.try_clone().ok();
+            println!("daemon log: {}", log_file.display());
+            (Stdio::from(f), dup.map(Stdio::from).unwrap_or_else(Stdio::null))
+        }
+        Err(_) => (Stdio::null(), Stdio::null()),
+    };
+
     // stdin is piped and the handle deliberately held for the app's whole life. The daemon exits
     // when that pipe closes, which happens however this process dies — including SIGKILL, where no
     // exit handler runs at all. Relying on the Exit event alone leaked a daemon on every crash or
@@ -105,6 +120,8 @@ fn ensure_daemon() -> Option<Child> {
         .arg(&entry)
         .current_dir(&root)
         .stdin(Stdio::piped())
+        .stdout(out)
+        .stderr(err)
         .env("RASPUTIN_PARENT_PIPE", "1")
         .spawn()
     {

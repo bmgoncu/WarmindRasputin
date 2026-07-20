@@ -15,6 +15,7 @@
 
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -56,6 +57,24 @@ const SILENCE_RMS_DB = -45;
 
 const run = promisify(execFile);
 
+/**
+ * Absolute path to a Homebrew tool, falling back to the bare name.
+ *
+ * An app launched from Finder or at login inherits a minimal PATH — `/usr/bin:/bin:/usr/sbin:/sbin`
+ * with no Homebrew — so `ffmpeg` and `whisperkit-cli` resolve only when the app happens to have
+ * been started from a shell. The same trap already caught `node`.
+ */
+function toolPath(name: string): string {
+    for (const dir of ["/opt/homebrew/bin", "/usr/local/bin"]) {
+        const full = `${dir}/${name}`;
+        if (existsSync(full)) return full;
+    }
+    return name;
+}
+
+const FFMPEG = toolPath("ffmpeg");
+const WHISPERKIT = toolPath("whisperkit-cli");
+
 export interface ListenEvents {
     log: (message: string) => void;
 }
@@ -96,7 +115,7 @@ export class VoiceInput {
                 return true;
             }
             this.events.log(`starting whisper server (${MODEL})…`);
-            this.server = spawn("whisperkit-cli", ["serve", "--model", MODEL], {
+            this.server = spawn(WHISPERKIT, ["serve", "--model", MODEL], {
                 stdio: ["ignore", "pipe", "pipe"],
             });
             this.server.on("error", (e) => this.events.log(`whisper server failed: ${String(e)}`));
@@ -124,12 +143,19 @@ export class VoiceInput {
         // 16 kHz mono is what the model wants; capturing at device rate and resampling later would
         // just move the work.
         this.recorder = spawn(
-            "ffmpeg",
+            FFMPEG,
             ["-y", "-loglevel", "error", "-f", "avfoundation", "-i", `:${MIC_INDEX}`,
              "-ac", "1", "-ar", "16000", "-t", String(MAX_RECORD_SEC), this.wav],
             { stdio: ["pipe", "ignore", "pipe"] },
         );
-        this.recorder.on("error", (e) => this.events.log(`recorder failed: ${String(e)}`));
+        this.recorder.on("error", (e) => this.events.log(`recorder failed to start: ${String(e)}`));
+        // ffmpeg's own diagnostics were being piped and then thrown away, so a device that could
+        // not be opened — the signature of a denied microphone — looked identical to a file that
+        // simply was not written.
+        this.recorder.stderr?.on("data", (d) => {
+            const line = String(d).trim();
+            if (line) this.events.log(`ffmpeg: ${line.split("\n")[0].slice(0, 160)}`);
+        });
         return true;
     }
 
@@ -184,7 +210,11 @@ export class VoiceInput {
         try {
             audio = await readFile(wav);
         } catch {
-            this.events.log("no audio captured");
+            this.events.log(
+                "no audio file was produced — ffmpeg could not open the microphone. If macOS shows " +
+                    "Rasputin as allowed, the grant is stale: an ad-hoc signature changes on every " +
+                    "rebuild, so remove Rasputin under Privacy & Security > Microphone and try again.",
+            );
             return null;
         }
         // A WAV header alone is ~44 bytes; anything near that is a key tapped, not speech.
@@ -229,7 +259,7 @@ export class VoiceInput {
     private async levelDb(wav: string): Promise<number | null> {
         try {
             // astats reports at info level, so `-v error` would silently print nothing.
-            const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", wav, "-af", "astats=metadata=1", "-f", "null", "-"]);
+            const { stderr } = await run(FFMPEG, ["-hide_banner", "-i", wav, "-af", "astats=metadata=1", "-f", "null", "-"]);
             const match = stderr.match(/RMS level dB:\s*(-?[\d.]+)/);
             return match ? Number(match[1]) : null;
         } catch {
