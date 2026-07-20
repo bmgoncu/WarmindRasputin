@@ -38,8 +38,10 @@ describe("phrase", () => {
 });
 
 describe("completionPhrase", () => {
-    it("names the project", () => {
-        expect(completionPhrase("RasputinClaudeAI")).toContain("RasputinClaudeAI");
+    it("names the project, in its SPOKEN form", () => {
+        // Directory names are not read out verbatim — see spokenProjectName.
+        expect(completionPhrase("RasputinClaudeAI")).toContain("Warmind Rasputin");
+        expect(completionPhrase("merge-mogul")).toContain("merge mogul");
     });
 
     it("leaves no placeholder behind", () => {

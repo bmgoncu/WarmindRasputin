@@ -164,7 +164,8 @@ describe("task completion", () => {
         const { obs, said, states } = makeObserver();
         fire(obs, change("busy", "idle"));
         expect(said).toHaveLength(1);
-        expect(said[0]).toContain("merge-mogul");
+        // Spoken form: separators become spaces so the name is intelligible aloud.
+        expect(said[0]).toContain("merge mogul");
         expect(said[0]).not.toContain("{");
         expect(states).toContain("idle");
     });
@@ -188,7 +189,8 @@ describe("focus", () => {
         const { obs, focus } = makeObserver();
         obs.handleHook({ session_id: "s1", cwd: "/Users/x/Depo/merge-mogul" });
         expect(focus).toHaveLength(1);
-        expect(focus[0].project).toBe("merge-mogul");
+        // The tray shows the spoken form, so what is displayed matches what is heard.
+        expect(focus[0].project).toBe("merge mogul");
     });
 
     it("does not re-announce the same session", () => {
