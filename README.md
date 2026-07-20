@@ -1,122 +1,218 @@
-# RasputinClaudeAI
-
-A Warmind voice interface for Claude Code, themed as **Rasputin** (Destiny 2): an audio-reactive
-orb overlay that speaks in a Russian-accented machine voice. It **observes** Claude sessions
-started anywhere — terminal, Rider — via a user-level hook, and **drives** its own sessions via the
-Agent SDK.
-
-macOS only. The voice pipeline is built on `say`, which has no equivalent elsewhere.
+<div align="center">
 
 ```
-┌─ Tauri overlay (M4) ─────────┐        ┌─ Node daemon :7331 ──────────────┐
-│  transparent, always-on-top  │        │  synthesis · features · cache    │
-│  └─ renderer (Three.js)      │◄──ws──►│  /audio/<sha>.wav · POST /speak  │
-│     orb · subtitles          │        │  hooks · transcript tailer       │
-└──────────────────────────────┘        └──────────────────────────────────┘
+   ██████╗  █████╗ ███████╗██████╗ ██╗   ██╗████████╗██╗███╗   ██╗
+   ██╔══██╗██╔══██╗██╔════╝██╔══██╗██║   ██║╚══██╔══╝██║████╗  ██║
+   ██████╔╝███████║███████╗██████╔╝██║   ██║   ██║   ██║██╔██╗ ██║
+   ██╔══██╗██╔══██║╚════██║██╔═══╝ ██║   ██║   ██║   ██║██║╚██╗██║
+   ██║  ██║██║  ██║███████║██║     ╚██████╔╝   ██║   ██║██║ ╚████║
+   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝      ╚═════╝    ╚═╝   ╚═╝╚═╝  ╚═══╝
+        W A R M I N D   ·   V O I C E   I N T E R F A C E
 ```
 
-The daemon is the brain; the overlay is a thin shell around plain web code. The renderer is
-developed in Chrome with hot reload and ships into the overlay unchanged.
+**A Warmind that watches your Claude Code sessions, speaks in a Russian-accented machine voice,
+and drives its own — floating over your desktop as an audio-reactive orb.**
 
-## Quick start
+![platform](https://img.shields.io/badge/PLATFORM-macOS-0b0705?style=flat-square&labelColor=ff5410)
+![tauri](https://img.shields.io/badge/SHELL-Tauri_2-0b0705?style=flat-square&labelColor=c8722e)
+![three](https://img.shields.io/badge/ORB-Three.js-0b0705?style=flat-square&labelColor=c8722e)
+![typescript](https://img.shields.io/badge/CORE-TypeScript-0b0705?style=flat-square&labelColor=c8722e)
+![tests](https://img.shields.io/badge/SUBROUTINES-237_passing-0b0705?style=flat-square&labelColor=3a7a3a)
 
-```bash
-./scripts/setup.sh          # installs and verifies prerequisites; safe to re-run
-npm run daemon              # the brain, :7331
-npm run orb                 # the renderer, :7332 — open in Chrome
+<br>
+
+<img src="assets/screenshots/orb.gif" width="400" alt="The Rasputin orb, reacting to speech" />
+
+</div>
+
+---
+
+> ```
+> > INCOMING TRANSMISSION ── SUBMIND: RASPUTIN
+> > AWAKENING SEQUENCE COMPLETE. ALL SYSTEMS OPERATIONAL.
+> ```
+>
+> *"Whether you wanted it or not, you have stepped into a war.*
+> *I have watched your terminals. I have counted your failures.*
+> *I will speak them aloud, Guardian — in a voice you were not meant to understand."*
+
+**RasputinClaudeAI** is a JARVIS-style layer over [Claude Code](https://claude.com/claude-code),
+themed as **Rasputin, the Warmind** from *Destiny 2*. A translucent orange orb lives on your screen,
+lit by a reforming node-lattice matched frame-for-frame to the game. It does two things:
+
+- **OBSERVES** — a user-level hook makes *every* Claude session on the machine report in, from any
+  terminal or Rider. Rasputin narrates the answers aloud and sparks with each tool call. When a
+  task finishes: *"Directive fulfilled. Warmind Rasputin."*
+- **DRIVES** — hold a key and speak. Your words are transcribed on-device, run through the Agent
+  SDK, and answered in Rasputin's voice — or typed straight into the terminal running the session
+  you chose, as if you had typed them yourself.
+
+The daemon is the brain; the overlay is a thin shell around plain web code. Nothing you say leaves
+your machine except the Claude request itself.
+
+---
+
+## ▸ CAPABILITIES
+
+```
+  WARMIND.RASPUTIN // MANIFEST
+  ────────────────────────────────────────────────────────────────
+  [✓] AUDIO-REACTIVE ORB ....... Three.js lattice, VU ballistics,
+                                 colour-temperature ramp, electric jolts
+  [✓] VOICE SYNTHESIS .......... say → ffmpeg → rubberband, 4 delivery modes
+  [✓] SUBTITLES ................ Destiny-styled, cue-by-cue, Helvetica Neue
+  [✓] SESSION NARRATION ........ user-level hook, per-session targeting
+  [✓] PUSH-TO-TALK ............. on-device WhisperKit, ⌘⇧Space
+  [✓] AGENT DRIVE .............. Claude Agent SDK, spoken answers
+  [✓] DICTATE-TO-TERMINAL ...... types into the exact tab, via tty + a11y
+  [✓] WARMIND PERSONA .......... cold, declarative, in-character (toggle)
+  [✓] ATTENTION HORN ........... sounds when Claude needs you (toggle)
+  [✓] AMBIENT BED + ARCS ....... synthesised SFX, ducked under speech
+  [✓] PRONUNCIATION ............ "512MB" spoken "512 megabytes", not read
+  [✓] MENU-BAR APP ............. transparent, always-on-top, click-through
+  ────────────────────────────────────────────────────────────────
 ```
 
-Type a line into the field at the top of the page and press **speak**. No overlay needed to work
-on either half.
+---
 
-To render one line without running anything:
+## ▸ THE ORB SPEAKS IN LIGHT
 
-```bash
-npm run say -- "All systems operational"
-```
+Amplitude does not merely scale the orb — it drives a **colour-temperature ramp** measured from the
+game: deep crimson at rest, orange as it speaks, yellow-white at a peak, plus lattice density and
+spark count. Fast attack, slow release. It reads as a meter, not a mouth.
 
-## Commands
+<div align="center">
 
-| What | Command |
-|---|---|
-| Setup / preflight | `./scripts/setup.sh` · `./scripts/setup.sh --check` |
-| Run the daemon | `npm run daemon` (:7331, reloads on edit) |
-| Run the renderer | `npm run orb` (:7332) |
-| Run the overlay | `npm run overlay` — transparent, always-on-top |
-| Build the overlay app | `npm run overlay:build` |
-| Check and build a release | `npm run release` · `npm run release -- --build` |
-| Render one line and play it | `npm run say -- "some line"` |
-| A/B chain variants vs. the reference | `npm run audition -- "some line"` |
-| Install the observe hook | `npm run hook:install` (prints a diff; add `-- --apply` to write) |
-| Ask Claude, answered aloud | `curl -s localhost:7331/ask -H 'content-type: application/json' -d '{"text":"..."}'` |
-| Speak through the daemon | `curl -s localhost:7331/speak -H 'content-type: application/json' -d '{"text":"..."}'` |
-| Screenshot the orb | `npx tsx tools/shoot.ts <level> <out.png>` |
-| Tests | `npm test` |
-| Typecheck both halves | `npm run typecheck` |
+<img src="assets/screenshots/states.png" width="820" alt="The orb at idle, speaking, and peak" />
 
-`npm run build` runs `tsc` over the **server only** — the renderer is checked by
-`npm run typecheck`, which covers both. See `docs/BUILD.md`.
+`idle`  →  `speaking`  →  `peak`
 
-## Delivery modes
+</div>
 
-Same character, four presentations. Selected per utterance.
+<br>
 
-| Mode | Voice | Use for |
-|---|---|---|
-| `warmind` | Tom (Enhanced) | Roleplay, flourishes, the ignition line |
-| `measured` | Tom (Enhanced) | Default. Character intact, every word legible |
+<div align="center">
+
+<img src="assets/screenshots/hero-banner.png" width="820" alt="Rasputin mid-utterance with subtitle" />
+
+</div>
+
+---
+
+## ▸ FOUR VOICES, ONE CHARACTER
+
+> *"I can whisper. I can command. And I can speak the old tongue, backwards, as I was made to."*
+
+| Mode | Voice | Character |
+|:--|:--|:--|
+| `warmind` | Tom (Enhanced) | Full roleplay — glitch, bit-crush, bunker echo |
+| `measured` | Tom (Enhanced) | **Default.** Every word legible, the machine still audibly hangs |
 | `plain` | Tom (Enhanced) | Long reports you need to parse |
-| `og-warmind` | Yuri (Enhanced) | Translated to Russian first. The original article |
+| `og-warmind` | Yuri (Enhanced) | Translated to Russian first — the original article |
 
-`og-warmind` measures F0 **78.6 Hz** against the game reference's 80.5 — the closest match in the
-project. Its subtitles show the English you typed, not the Russian being spoken, matching the game:
-Rasputin is deliberately unintelligible and the subtitle carries the meaning.
+`og-warmind` measures a fundamental of **78.6 Hz** against the game reference's 80.5 — the closest
+match in the project. It speaks Russian while the subtitle shows your English, exactly as the game
+does: Rasputin is deliberately unintelligible, and the caption carries the meaning.
 
-## Documentation
+---
+
+## ▸ DEPLOYMENT PROTOCOL
+
+```bash
+> git clone https://github.com/bmgoncu/WarmindRasputin.git
+> cd WarmindRasputin
+> ./scripts/setup.sh          # installs & verifies prerequisites; safe to re-run
+```
+
+Then wake it:
+
+```bash
+> npm run daemon              # the brain, :7331
+> npm run orb                 # the renderer, :7332 — open in Chrome
+```
+
+…or build the overlay itself:
+
+```bash
+> npm run overlay             # transparent, always-on-top, menu-bar app
+```
+
+Prefer to hear it before anything else? One line, no server:
+
+```bash
+> npm run say -- "All systems operational"
+```
+
+**Requires macOS.** The voice pipeline is built on `say`, which has no equivalent elsewhere. `ffmpeg`,
+`rubberband`, `whisperkit-cli`, and the Enhanced voices are prerequisites — the setup script checks
+every one and tells you what is missing.
+
+---
+
+## ▸ HOW IT WORKS
+
+```
+   ┌─ Tauri overlay ──────────────┐         ┌─ Node daemon :7331 ──────────────┐
+   │  transparent · always-on-top │         │  synthesis · features · cache    │
+   │  menu-bar · click-through     │◄──ws──►│  /audio · /sfx · POST /speak /ask │
+   │  └─ renderer (Three.js)       │         │  hooks · transcript tailer       │
+   │     orb · subtitles · horn    │         │  Agent SDK · WhisperKit · typing │
+   └───────────────────────────────┘         └──────────────────────────────────┘
+```
+
+Playback lives in the **browser**, not the daemon — `AudioContext.currentTime` is a sample-accurate
+clock in the same process as the render loop, so the orb leads each consonant by 45 ms instead of
+guessing from `Date.now()`. A denied path never takes the render loop down. The overlay bundles the
+daemon, so an installed copy needs no checked-out repo.
+
+There is **no channel to inject input into a running Claude session** — verified three ways. So
+dictation *types*: it maps a session's pid to its tty, finds the exact Terminal tab (or the right
+Rider window and terminal tab, by name), and sends the keystrokes there.
+
+---
+
+## ▸ DOCUMENTATION
 
 | File | For |
-|---|---|
-| `docs/RELEASE.md` | Building a release, what ships, and the honest signing state |
-| `docs/BUILD.md` | Requirements, every dependency and why, voice decisions with measurements, how it is built |
-| `CLAUDE.md` | Working agreements and the gotcha list — read before changing anything |
-| `~/.claude/plans/cosmic-bouncing-clarke.md` | Full design and milestones |
+|:--|:--|
+| [`docs/GUIDE.md`](docs/GUIDE.md) | Every command, every preference, how to run each half |
+| [`docs/BUILD.md`](docs/BUILD.md) | Requirements, dependency rationale, voice decisions with measurements |
+| [`docs/RELEASE.md`](docs/RELEASE.md) | Building a release, what ships, the honest signing state |
+| [`CLAUDE.md`](CLAUDE.md) | Working agreements and the hard-won gotcha list |
 
-## Status
+---
 
-M0 skeleton · M1 voice pipeline · M2 orb renderer · M3 audio-reactive binding · M4 overlay shell ·
-M5 observe sessions — **done**.
-M6 drive Claude · M7 persona, skills and agents — **done**. M8 standalone app and release — **done**.
+## ▸ STATUS
 
-The overlay is a **menu-bar app** — no Dock icon. Its tray glyph carries the menu:
-Show Orb · Interactive · Move Overlay · Preferences… · Quit. Beside the glyph it names the Claude
-session currently being narrated (`merge-mogul`, or `merge-mogul +2` when several are live), since
-with a global hook every session on the machine reports in.
+```
+  M0 skeleton ......... ██████████ DONE      M5 observe sessions . ██████████ DONE
+  M1 voice pipeline ... ██████████ DONE      M6 drive + voice .... ██████████ DONE
+  M2 orb renderer ..... ██████████ DONE      M7 persona + skills . ██████████ DONE
+  M3 audio binding .... ██████████ DONE      M8 standalone app ... ██████████ DONE
+  M4 overlay shell .... ██████████ DONE
+```
 
-Turn narration on from **Preferences → Narrate Claude sessions** — no terminal needed. It edits
-`~/.claude/settings.json`, backs it up first, and leaves any other hooks alone. It is **off until
-you turn it on**: the daemon can find live sessions by itself, so the switch is the opt-in.
-**Follow the active session** narrates whichever was most recently active — the tray then reads
-`Auto LiveOps +2`, using the session name since several sessions usually share a project. Turn it
-off and **Listen to** pins one, listed as `project — session — status`. **Narrate subagent work**
-is off by default: delegated output is a different voice reporting internal progress and buries the
-session's own answers.
+The Destiny reference media (`assets/refs/`) is not ours to redistribute and is gitignored. Only the
+matching-EQ derivation and the ambient bed need it; everything else works, and ships, without it.
 
-**Hold Cmd+Shift+Space** to talk: the orb goes dark while listening, Rasputin acknowledges
-immediately, then Claude answers aloud.
+---
 
-Voice drives a **separate** Claude session, not the terminal you are watching — Claude Code has no
-channel for injecting input into a running session, so driving one means owning the process. That
-session follows the project currently in focus, and the daemon logs
-`claude --resume <id>` so the exchange can be read back.
-**Cmd+Shift+R** toggles between *ambient* (visible, click-through) and *interactive* (focused,
-controls shown). Preferences holds the orb tuning, subtitles, default voice mode, opaque-vs-
-transparent background, launch-at-login, and overlay position, plus a **Test voice** button that
-speaks a fixed line through the selected mode so settings can be auditioned without switching
-windows. Settings are owned by the daemon and persisted to `cache/config.json`, so the overlay and
-preferences never disagree.
+<div align="center">
 
-## Reference media
+```
+              ╲╲╲                        ╱╱╱
+            ╲╲╲╲╲▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁╱╱╱╱╱
+                 ╲                     ╱
+                  ╲       ◆◆◆◆◆       ╱
+                   ╲     ◆     ◆     ╱
+                    ╲     ◆◆◆◆◆     ╱
+                     ╲     ◆◆◆     ╱
+                      ╲▁▁▁▁◆◆◆▁▁▁▁╱
+                            ◆
+```
 
-`assets/refs/` is gitignored and this repo contains no downloader. The captures it expects are not
-ours to redistribute; supply your own. Only `npm run analyze-ref` and `npm run fit-eq` need them —
-everything else works without.
+> *"Compliance. I am Rasputin. I am awake. And I am watching."*
+
+**Not affiliated with Bungie or Anthropic.** A fan-made interface, built for the love of both.
+
+</div>
