@@ -244,16 +244,16 @@ function syncControls(cfg: { shakeScale?: number; outerRadius?: number; joltCoun
 link.onMessage = (msg) => {
     switch (msg.type) {
         case "speak":
-            // sourceText over text: for og-warmind the Russian is what plays, but the English is
-            // what means anything — same division of labour as the game's own subtitles.
-            pendingSubtitle = msg.sourceText ?? msg.text;
-            subtitle.setCues(pendingSubtitle);
+            // No subtitle work here on purpose. Messages arrive faster than they can be spoken, so
+            // setting cues on arrival overwrote the caption of whatever was still playing. The
+            // caption now travels with the audio and is set when playback actually starts.
             void player.play(msg, DAEMON_ORIGIN).catch((e) => {
                 console.error("playback failed:", e);
                 link.log("error", `playback failed: ${String(e)}`);
                 // The subtitle is the fallback channel, not a decoration on top of working audio —
                 // exactly as in the game, where the speech is unintelligible and the caption
                 // carries the meaning. Silent speech must still be readable.
+                subtitle.setCues(msg.sourceText ?? msg.text);
                 subtitle.update(0);
             });
             break;
@@ -296,9 +296,10 @@ link.onMessage = (msg) => {
 };
 // Subtitle timing follows PLAYBACK, not the speak message: on a cache miss the audio can be a
 // second behind the message, and a subtitle appearing before any sound reads as broken.
-let pendingSubtitle = "";
-player.onPhase = (id, phase, ctxLatency) => {
+player.onPhase = (id, phase, ctxLatency, caption) => {
     if (phase === "started") {
+        // Set here, from the utterance that is actually starting.
+        subtitle.setCues(caption);
         subtitle.update(0);
         // Reported because an off-screen or unstyled subtitle looks identical to one that was
         // never asked to show, and the overlay has no devtools to check it in.

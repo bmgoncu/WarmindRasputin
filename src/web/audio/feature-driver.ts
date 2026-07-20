@@ -27,6 +27,14 @@ interface Playing {
     id: string;
     source: AudioBufferSourceNode;
     timeline: TimelineWire;
+    /**
+     * The text this utterance is saying.
+     *
+     * Carried with the audio rather than read when the message arrives. Messages arrive far faster
+     * than they can be spoken, so setting the subtitle on arrival overwrote the caption of
+     * whatever was still playing — leaving the last one stuck on screen, describing nothing.
+     */
+    caption: string;
     /** ctx.currentTime at which playback was scheduled to begin. */
     startedAt: number;
     endsAt: number;
@@ -48,7 +56,7 @@ export class SpeechPlayer {
     private queue: { msg: SpeakMsg; base: string }[] = [];
 
     /** Fired when audio actually starts and when it ends — the authoritative speaking signal. */
-    onPhase: ((id: string, phase: "started" | "ended", latency: number) => void) | null = null;
+    onPhase: ((id: string, phase: "started" | "ended", latency: number, caption: string) => void) | null = null;
     /** Fired as each onset in the timeline is crossed, for one-shot impulses. */
     onOnset: ((strength: number) => void) | null = null;
     /** Non-fatal problems worth surfacing in the daemon log. */
@@ -141,20 +149,30 @@ export class SpeechPlayer {
         const startedAt = ctx.currentTime + 0.02;
         source.start(startedAt);
 
+        // sourceText over text: for og-warmind the Russian is spoken but the English is what means
+        // anything — the same division of labour as the game's own subtitles.
+        const caption = msg.sourceText ?? msg.text;
         this.onsetCursor = 0;
-        this.lastText = msg.text;
-        this.playing = { id: msg.id, source, timeline: msg.timeline, startedAt, endsAt: startedAt + buffer.duration };
+        this.lastText = caption;
+        this.playing = {
+            id: msg.id,
+            source,
+            timeline: msg.timeline,
+            caption,
+            startedAt,
+            endsAt: startedAt + buffer.duration,
+        };
 
         source.onended = (): void => {
             if (this.playing?.id === msg.id) {
                 this.playing = null;
-                this.onPhase?.(msg.id, "ended", ctx.outputLatency ?? 0);
+                this.onPhase?.(msg.id, "ended", ctx.outputLatency ?? 0, caption);
                 // Only now does the next one begin — this is what makes utterances follow each
                 // other rather than overlap.
                 this.next();
             }
         };
-        this.onPhase?.(msg.id, "started", ctx.outputLatency ?? 0);
+        this.onPhase?.(msg.id, "started", ctx.outputLatency ?? 0, caption);
         if (ctx.state !== "running") {
             this.onWarning?.(`scheduled while context is "${ctx.state}" — visuals run, audio is silent`);
         }

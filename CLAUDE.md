@@ -230,6 +230,11 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
   session is tailed; speaking them all interleaves four projects into one voice. Automatic mode
   narrates the FOCUSED session only. Note focus eligibility and narration eligibility are separate
   questions — gating hook events on the current focus freezes it on the first session forever.
+- **Playback order and subtitles belong to the RENDERER, not the daemon.** The daemon serialises
+  rendering and broadcasts as soon as audio exists — far faster than it can be spoken. Playing each
+  arrival immediately made every message cut off the one before, and setting the subtitle on
+  arrival overwrote the caption of whatever was still playing, stranding a stale line on screen.
+  Utterances queue, and the caption travels WITH the audio.
 - **Speak only the newest message in a batch.** A backlog queues minutes of speech that is stale
   before it is heard.
 - **Long replies are SPLIT, never truncated.** `summarizeForSpeech` clips to a headline and drops
