@@ -234,6 +234,9 @@ export class NodeGraph {
         this.opts.rebuildInterval = 1e9;
     }
 
+    /** Fired when an arc spawns, carrying its strength, so a sound can accompany it. */
+    onArc: ((strength: number) => void) | null = null;
+
     /** Live counts for the dev harness — see window.__orb in main.ts. */
     get debug(): { jolts: number; edges: number; nodes: number; litEdges: number; arcs: number; hops: number[]; shake: number; stat: Record<string, number> } {
         return {
@@ -702,7 +705,11 @@ export class NodeGraph {
         this.nextArc = (0.2 / o.arcCount) * (0.5 + Math.random());
 
         const arc = this.makeArc();
-        if (arc) this.arcs.push(arc);
+        if (arc) {
+            this.arcs.push(arc);
+            // Fired here rather than on a timer, so the crackle and the flash are the same event.
+            this.onArc?.(arc.strength);
+        }
     }
 
     /**

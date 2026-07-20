@@ -5,16 +5,18 @@ function makeObserver() {
     const pulses: number[] = [];
     const states: string[] = [];
     const focus: { project?: string; sessions: number; pinned?: boolean }[] = [];
+    const questions: (string | undefined)[] = [];
     const obs = new SessionObserver({
         say: (t) => said.push(t),
         pulse: (s) => pulses.push(s),
         state: (s) => states.push(s),
         focus: (f) => focus.push(f),
+        question: (about) => questions.push(about),
     });
     // Narration is off by default — see the `enabled` field. Every test below is about what
     // happens once the user has opted in.
     obs.setEnabled(true);
-    return { obs, said, pulses, states, focus };
+    return { obs, said, pulses, states, focus, questions };
 }
 
 /** Reaches the private transcript handler the tailer would normally drive. */
@@ -38,6 +40,7 @@ describe("opt-in", () => {
             pulse: () => undefined,
             state: (s) => states.push(s),
             focus: () => undefined,
+            question: () => undefined,
         });
         obs.handleHook({ hook_event_name: "UserPromptSubmit", session_id: "s1", cwd: "/p/x" });
         (obs as unknown as { onTranscript: (e: unknown) => void }).onTranscript({
@@ -51,7 +54,8 @@ describe("opt-in", () => {
 
     it("stops following when disabled, so nothing is polled for nothing", async () => {
         const obs = new SessionObserver({
-            say: () => undefined, pulse: () => undefined, state: () => undefined, focus: () => undefined,
+            say: () => undefined, pulse: () => undefined, state: () => undefined,
+            focus: () => undefined, question: () => undefined,
         });
         obs.setEnabled(true);
         obs.handleHook({ session_id: "s1", transcript_path: "/tmp/x/abc.jsonl" });
@@ -369,5 +373,35 @@ describe("driven sessions", () => {
             lines: [assistant([{ type: "text", text: "A normal session speaking normally." }], "e")],
         });
         expect(said).toEqual(["A normal session speaking normally."]);
+    });
+});
+
+describe("question detection", () => {
+    it("fires on a tool that exists to ask the user something", () => {
+        // PreToolUse is the only explicit signal — a question asked in prose has no hook, and
+        // matching a trailing question mark fires on rhetorical ones too.
+        const { obs, questions, states } = makeObserver();
+        obs.handleHook({ hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", session_id: "s1" });
+        expect(questions).toEqual(["AskUserQuestion"]);
+        expect(states).toContain("alert");
+    });
+
+    it("fires on a plan being presented for approval", () => {
+        const { obs, questions } = makeObserver();
+        obs.handleHook({ hook_event_name: "PreToolUse", tool_name: "ExitPlanMode", session_id: "s1" });
+        expect(questions).toEqual(["ExitPlanMode"]);
+    });
+
+    it("fires on the Notification hook, which means Claude is waiting", () => {
+        const { obs, questions } = makeObserver();
+        obs.handleHook({ hook_event_name: "Notification", message: "waiting for input", session_id: "s1" });
+        expect(questions).toEqual(["waiting for input"]);
+    });
+
+    it("does NOT fire on an ordinary tool call", () => {
+        const { obs, questions, pulses } = makeObserver();
+        obs.handleHook({ hook_event_name: "PreToolUse", tool_name: "Read", session_id: "s1" });
+        expect(questions).toEqual([]);
+        expect(pulses).toHaveLength(1);
     });
 });

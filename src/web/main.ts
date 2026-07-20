@@ -16,6 +16,7 @@ import { SpeechPlayer } from "./audio/feature-driver.js";
 import { DaemonLink } from "./net/client.js";
 import { DAEMON_PORT } from "../shared/protocol.js";
 import { Subtitle } from "./ui/subtitle.js";
+import { Ambience } from "./audio/ambience.js";
 import { setupOverlay, inOverlay } from "./overlay.js";
 
 const canvas = document.getElementById("orb") as HTMLCanvasElement;
@@ -162,6 +163,7 @@ const DAEMON_ORIGIN = inOverlay()
 
 const player = new SpeechPlayer();
 const subtitle = new Subtitle();
+const ambience = new Ambience();
 const link = new DaemonLink(`${DAEMON_ORIGIN.replace(/^http/, "ws")}/ws`, inOverlay() ? "tauri-overlay" : "chrome-dev");
 const textInput = document.getElementById("text") as HTMLInputElement;
 const chainSel = document.getElementById("chain") as HTMLSelectElement;
@@ -269,6 +271,12 @@ link.onMessage = (msg) => {
             // "waiting on you" cannot be confused with "idle".
             orb.setListening(msg.state === "listening");
             break;
+        case "question":
+            // One-shot: the horn sounds once, while the alert state it puts the orb into persists
+            // until the question is answered.
+            ambience.playHorn();
+            orb.pulse(1);
+            break;
         case "caption":
             subtitle.setCues(msg.text);
             subtitle.update(0);
@@ -284,6 +292,12 @@ link.onMessage = (msg) => {
             if (msg.joltCount !== undefined) orb.setJoltCount(msg.joltCount);
             if (msg.arcCount !== undefined) orb.setArcCount(msg.arcCount);
             if (msg.opaqueBackground !== undefined) setOpaqueBackground(msg.opaqueBackground);
+            ambience.setLevels({
+                ...(msg.ambientVolume !== undefined ? { ambient: msg.ambientVolume } : {}),
+                ...(msg.effectsVolume !== undefined ? { effects: msg.effectsVolume } : {}),
+                ...(msg.bgDuckVolume !== undefined ? { duck: msg.bgDuckVolume } : {}),
+            });
+            if (msg.ambientVolume !== undefined) void ambience.setBedEnabled(msg.ambientVolume > 0);
             if (msg.subtitles !== undefined) {
                 subtitle.setEnabled(msg.subtitles);
                 subBtn.textContent = msg.subtitles ? "subs on" : "subs off";
@@ -297,6 +311,8 @@ link.onMessage = (msg) => {
 // Subtitle timing follows PLAYBACK, not the speak message: on a cache miss the audio can be a
 // second behind the message, and a subtitle appearing before any sound reads as broken.
 player.onPhase = (id, phase, ctxLatency, caption) => {
+    // The bed and effects duck under the voice and come back on their own.
+    ambience.setDucked(phase === "started");
     if (phase === "started") {
         // Set here, from the utterance that is actually starting.
         subtitle.setCues(caption);
@@ -312,6 +328,23 @@ player.onPhase = (id, phase, ctxLatency, caption) => {
 // Each speech onset launches a shockwave, so consonants read as impulses rather than only as level.
 player.onOnset = (strength) => orb.pulse(0.45 + strength * 0.55);
 player.onWarning = (message) => link.log("warn", message);
+ambience.onWarning = (message) => link.log("warn", message);
+
+// Arc crackles are fired by the graph as each arc appears, so sound and flash are one event.
+orb.onArc = (strength) => ambience.playArc(strength);
+
+/**
+ * Ambience needs the speech player's context, which only exists after a user gesture unlocks it.
+ * Polled rather than hooked, because the context is created lazily inside the player and there is
+ * no event for it.
+ */
+const attachAmbience = setInterval(() => {
+    const ctx = player.audioContext;
+    if (!ctx) return;
+    clearInterval(attachAmbience);
+    ambience.attach(ctx);
+    void ambience.preload(DAEMON_ORIGIN).then(() => link.send({ type: "get-config" }));
+}, 400);
 link.onOpen = ((prev) => () => {
     prev?.();
     // Adopt whatever the daemon already has, so a reloaded overlay is not reset to defaults.

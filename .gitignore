@@ -27,3 +27,5 @@ src-tauri/gen/
 
 # Bundled daemon — regenerable via `npm run bundle:daemon`.
 dist-daemon/
+# Rendered effects — regenerable via `npm run build:sfx`.
+dist-sfx/

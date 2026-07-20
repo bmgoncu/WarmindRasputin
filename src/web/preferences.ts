@@ -30,6 +30,7 @@ const DEFAULTS: Required<
         OrbConfig,
         | "idleFloor" | "shakeScale" | "outerRadius" | "joltCount" | "arcCount"
         | "opaqueBackground" | "subtitles" | "chain" | "narrateSubagents" | "speechDetail" | "dictateMode" | "dictateSubmit" | "persona"
+        | "ambientVolume" | "effectsVolume" | "bgDuckVolume" | "questionSound"
     >
 > = {
     idleFloor: 0.22,
@@ -43,6 +44,10 @@ const DEFAULTS: Required<
     narrateSubagents: false,
     speechDetail: "full",
     persona: false,
+    ambientVolume: 0.35,
+    effectsVolume: 0.5,
+    bgDuckVolume: 0.3,
+    questionSound: true,
     dictateMode: "agent",
     dictateSubmit: true,
 };
@@ -121,6 +126,17 @@ function render(cfg: OrbConfig): void {
     if (cfg.opaqueBackground !== undefined) el.opaque.checked = cfg.opaqueBackground;
     if (cfg.subtitles !== undefined) el.subs.checked = cfg.subtitles;
     if (cfg.chain !== undefined) el.chain.value = cfg.chain;
+    for (const [id, key, fmt] of [
+        ["ambient", "ambientVolume", 2],
+        ["effects", "effectsVolume", 2],
+        ["duck", "bgDuckVolume", 2],
+    ] as const) {
+        const v = cfg[key];
+        if (v === undefined) continue;
+        $<HTMLInputElement>(id).value = String(Math.round(v * 100));
+        $(`${id}v`).textContent = v.toFixed(fmt);
+    }
+    if (cfg.questionSound !== undefined) $<HTMLInputElement>("questionsound").checked = cfg.questionSound;
     if (cfg.persona !== undefined) $<HTMLInputElement>("persona").checked = cfg.persona;
     if (cfg.dictateMode !== undefined) $<HTMLSelectElement>("dictate").value = cfg.dictateMode;
     if (cfg.dictateSubmit !== undefined) $<HTMLInputElement>("dictatesubmit").checked = cfg.dictateSubmit;
@@ -163,6 +179,20 @@ el.arcs.addEventListener("input", () => push({ arcCount: Number(el.arcs.value) }
 el.opaque.addEventListener("change", () => push({ opaqueBackground: el.opaque.checked }));
 el.subs.addEventListener("change", () => push({ subtitles: el.subs.checked }));
 el.chain.addEventListener("change", () => push({ chain: el.chain.value }));
+for (const [id, key] of [
+    ["ambient", "ambientVolume"],
+    ["effects", "effectsVolume"],
+    ["duck", "bgDuckVolume"],
+] as const) {
+    $<HTMLInputElement>(id).addEventListener("input", (e) => {
+        const v = Number((e.target as HTMLInputElement).value) / 100;
+        $(`${id}v`).textContent = v.toFixed(2);
+        push({ [key]: v });
+    });
+}
+$<HTMLInputElement>("questionsound").addEventListener("change", (e) =>
+    push({ questionSound: (e.target as HTMLInputElement).checked }),
+);
 $<HTMLInputElement>("persona").addEventListener("change", (e) =>
     push({ persona: (e.target as HTMLInputElement).checked }),
 );

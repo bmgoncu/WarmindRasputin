@@ -125,6 +125,18 @@ export interface OrbConfig {
      * reads someone else's words, and rewriting those would misreport what they said.
      */
     persona?: boolean;
+    /** 0-1 ambient bed level. */
+    ambientVolume?: number;
+    /** 0-1 one-shot effect level — arcs and the horn. */
+    effectsVolume?: number;
+    /**
+     * 0-1 level both buses drop to while Rasputin speaks.
+     *
+     * Not a mute: a bed that vanishes entirely draws more attention than one that dips.
+     */
+    bgDuckVolume?: number;
+    /** Sound the horn when Claude is waiting on you. */
+    questionSound?: boolean;
     dictateMode?: "agent" | "type";
     /** Send Return after typing. Off leaves the line in the prompt for you to review. */
     dictateSubmit?: boolean;
@@ -157,6 +169,18 @@ export interface FocusMsg {
     dictateTo?: string;
 }
 
+/**
+ * Claude is waiting on you — a permission prompt, a question, or a selection.
+ *
+ * Its own message rather than a `state`, because it is an EVENT: the horn fires once, while the
+ * state it puts the orb into persists until answered.
+ */
+export interface QuestionMsg {
+    type: "question";
+    /** What is being asked, when known — a tool name or a short description. */
+    about?: string;
+}
+
 /** Shows a subtitle without speaking it — used to preview dictation before it is typed. */
 export interface CaptionMsg {
     type: "caption";
@@ -165,7 +189,7 @@ export interface CaptionMsg {
     holdSec?: number;
 }
 
-export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg | FocusMsg | CaptionMsg;
+export type ServerMsg = SpeakMsg | StateMsg | StopMsg | PulseMsg | ConfigMsg | FocusMsg | CaptionMsg | QuestionMsg;
 
 // --- renderer → server -------------------------------------------------------------------
 
@@ -274,7 +298,8 @@ export function isServerMsg(v: unknown): v is ServerMsg {
         t === "pulse" ||
         t === "config" ||
         t === "focus" ||
-        t === "caption"
+        t === "caption" ||
+        t === "question"
     );
 }
 

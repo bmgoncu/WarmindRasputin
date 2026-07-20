@@ -316,6 +316,11 @@ export class Orb {
         this.outer.setJolts(life / n, n, life);
     }
 
+    /** Fired when an arc spawns anywhere in the orb. */
+    set onArc(fn: ((strength: number) => void) | null) {
+        this.outer.onArc = fn;
+    }
+
     /** Concurrent arcs jumping across the outer graph. Dev harness slider. */
     setArcCount(n: number): void {
         this.outer.setArcCount(n);

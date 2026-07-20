@@ -13,6 +13,7 @@
     "release": "./scripts/release.sh",
     "build": "tsc",
     "bundle:daemon": "node scripts/bundle-daemon.mjs",
+    "build:sfx": "node scripts/build-sfx.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json",
     "typecheck:web": "tsc -p tsconfig.web.json",
     "build:watch": "tsc --watch",

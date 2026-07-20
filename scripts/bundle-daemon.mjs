@@ -11,7 +11,7 @@
  * by scripts/setup.sh and reported at startup.
  */
 import { build } from "esbuild";
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, readdir } from "node:fs/promises";
 
 await mkdir("dist-daemon", { recursive: true });
 
@@ -40,6 +40,13 @@ const result = await build({
 await copyFile("assets/eq-curve.json", "dist-daemon/eq-curve.json");
 // The pronunciation map is data too, and speech is noticeably worse without it.
 await copyFile("assets/speech-map.json", "dist-daemon/speech-map.json");
+
+// Effects live beside the daemon so RASPUTIN_ASSETS_DIR reaches them too. ambience.wav is absent
+// unless the local reference media is present — it is not ours to redistribute.
+await mkdir("dist-daemon/sfx", { recursive: true });
+for (const name of await readdir("dist-sfx").catch(() => [])) {
+    await copyFile(`dist-sfx/${name}`, `dist-daemon/sfx/${name}`);
+}
 
 const bytes = Object.values(result.metafile.outputs)[0]?.bytes ?? 0;
 console.log(`  dist-daemon/daemon.mjs  ${(bytes / 1024 / 1024).toFixed(1)} MB`);

@@ -72,6 +72,11 @@ export class SpeechPlayer {
         return this.ctx;
     }
 
+    /** The shared AudioContext, once created. Ambience attaches to it — see Ambience.attach. */
+    get audioContext(): AudioContext | null {
+        return this.ctx;
+    }
+
     get unlocked(): boolean {
         return this.ctx !== null && this.ctx.state === "running";
     }

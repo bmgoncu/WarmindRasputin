@@ -58,6 +58,10 @@ let config: OrbConfig = {
     narrateSubagents: false,
     speechDetail: "full",
     persona: false,
+    ambientVolume: 0.35,
+    effectsVolume: 0.5,
+    bgDuckVolume: 0.3,
+    questionSound: true,
     dictateMode: "agent",
     dictateSubmit: true,
 };
@@ -82,6 +86,10 @@ const CACHE_DIR = resolve("cache");
 // vite.config.ts builds to lib/web, not dist/. This pointed at dist/ and so silently served 404
 // for every asset in production — invisible in development, where Vite serves the page instead.
 const DIST_DIR = resolve("lib", "web");
+/** Rendered effects. Beside the bundled daemon in an installed app, in dist-sfx during development. */
+const SFX_DIR = process.env.RASPUTIN_ASSETS_DIR
+    ? resolve(process.env.RASPUTIN_ASSETS_DIR, "sfx")
+    : resolve("dist-sfx");
 
 const MIME: Record<string, string> = {
     ".html": "text/html; charset=utf-8",
@@ -206,6 +214,10 @@ const observer = new SessionObserver({
     say: (text) => enqueueSpeech(text),
     pulse: (strength) => broadcast({ type: "pulse", strength }),
     state: (state) => broadcast({ type: "state", state }),
+    question: (about) => {
+        console.log(`question: ${about ?? "(waiting on you)"}`);
+        if (config.questionSound !== false) broadcast({ type: "question", about });
+    },
     focus: (info) => {
         lastFocus = { type: "focus", ...info };
         // A spoken instruction should act on the project being watched, not on the daemon's own
@@ -478,6 +490,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (url.pathname === "/observed" && req.method === "GET") {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ watching: observer.watching }));
+        return;
+    }
+
+    if (url.pathname.startsWith("/sfx/")) {
+        const path = safeJoin(SFX_DIR, url.pathname.slice("/sfx".length));
+        if (path && (await serveFile(res, path))) return;
+        res.writeHead(404).end("no such effect");
         return;
     }
 

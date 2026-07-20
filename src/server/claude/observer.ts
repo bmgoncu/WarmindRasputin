@@ -50,7 +50,17 @@ export interface ObserverEvents {
     state: (state: "idle" | "listening" | "thinking" | "alert") => void;
     /** The session currently being narrated changed. */
     focus: (info: FocusInfo) => void;
+    /** Claude is waiting on the user — a permission prompt, a question, or a selection. */
+    question: (about?: string) => void;
 }
+
+/**
+ * Tools that exist to ASK the user something.
+ *
+ * Detected through PreToolUse, which is the only explicit signal: a question asked in prose has no
+ * hook, and matching on a trailing question mark fires on rhetorical ones too.
+ */
+const QUESTION_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
 
 /**
  * Length of ONE spoken utterance, not of the whole reply.
@@ -253,10 +263,18 @@ export class SessionObserver {
                 this.events.state("thinking");
                 break;
             case "PreToolUse":
+                if (payload.tool_name && QUESTION_TOOLS.has(payload.tool_name)) {
+                    this.events.question(payload.tool_name);
+                    this.events.state("alert");
+                    break;
+                }
                 // Tool activity is shown, never narrated — see the speech policy.
                 this.events.pulse(0.5);
                 break;
             case "Notification":
+                // Claude Code emits this when it is waiting on input, which is exactly the case
+                // the horn exists for.
+                this.events.question(payload.message);
                 this.events.state("alert");
                 break;
             case "Stop":
