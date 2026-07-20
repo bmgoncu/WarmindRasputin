@@ -51,9 +51,9 @@ compares all three — it caught `package.json` having no `version` field at all
 ```bash
 npm run release                 # check
 npm run release -- --build      # check, then build .app and .dmg
-git tag -a v0.1.0 -m "..."      # human
-git push origin v0.1.0          # human
-gh release create v0.1.0 --notes-file NOTES.md src-tauri/target/release/bundle/dmg/*.dmg
+git tag -a v0.2.0 -m "..."      # human
+git push origin v0.2.0          # human
+gh release create v0.2.0 --notes-file NOTES.md src-tauri/target/release/bundle/dmg/*.dmg
 ```
 
 Release notes should carry the Gatekeeper instruction and the prerequisite list, since neither is

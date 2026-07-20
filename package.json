@@ -1,6 +1,6 @@
 {
   "name": "rasputin-claude-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warmind voice interface for Claude Code \u2014 Rasputin persona, audio-reactive orb overlay, observes and drives Claude sessions.",
   "private": true,
   "type": "module",
