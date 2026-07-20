@@ -10,7 +10,7 @@
  */
 
 /** What a canned line is for. */
-export type PhraseKind = "ack" | "listening" | "empty" | "failed" | "complete";
+export type PhraseKind = "ack" | "listening" | "empty" | "failed" | "complete" | "completeNamed";
 
 const PHRASES: Record<PhraseKind, string[]> = {
     /** Spoken the moment a spoken instruction has been transcribed, before Claude is consulted. */
@@ -32,8 +32,36 @@ const PHRASES: Record<PhraseKind, string[]> = {
     empty: ["No input detected.", "Silence. Repeat the directive.", "Nothing received."],
     /** Something in the pipeline failed. */
     failed: ["Subroutine failure.", "Unable to comply.", "Directive could not be processed."],
-    /** A driven or observed task finished. */
-    complete: ["Task complete.", "Directive fulfilled.", "Operation concluded.", "Done."],
+    /**
+     * A task finished, with no project to name.
+     *
+     * Used when the session's working directory is unknown — rare, but a completion announcement
+     * that says "undefined" is worse than one that says less.
+     */
+    complete: [
+        "Directive fulfilled.",
+        "Operation concluded.",
+        "Task complete. Returning to standby.",
+        "Execution ended. All subroutines idle.",
+        "Objective achieved.",
+        "Work has ceased. Awaiting further directives.",
+    ],
+    /**
+     * A task finished on a named project. `{project}` is substituted.
+     *
+     * Written so the project name lands late where possible — it is the one word a listener is
+     * waiting for, and a phrase that opens with it is half heard before they are paying attention.
+     */
+    completeNamed: [
+        "Directive fulfilled. {project}.",
+        "Operation concluded on {project}.",
+        "{project}. Objective achieved.",
+        "Task complete. {project} returns to standby.",
+        "Execution ended on {project}. All subroutines idle.",
+        "{project} is quiet. Work has ceased.",
+        "Cycle closed on {project}.",
+        "{project}: directive discharged.",
+    ],
 };
 
 /** Remembers the last line of each kind, so the same one is never heard twice running. */
@@ -45,13 +73,25 @@ const lastUsed = new Map<PhraseKind, string>();
  * With ten acknowledgements a naive random pick still repeats about one time in ten, and hearing
  * "Acknowledged. Acknowledged." is exactly the tell that it is a canned list.
  */
-export function phrase(kind: PhraseKind): string {
+export function phrase(kind: PhraseKind, vars: Record<string, string> = {}): string {
     const options = PHRASES[kind];
     const previous = lastUsed.get(kind);
     const pool = options.length > 1 ? options.filter((p) => p !== previous) : options;
     const chosen = pool[Math.floor(Math.random() * pool.length)];
     lastUsed.set(kind, chosen);
-    return chosen;
+    return chosen.replace(/\{(\w+)\}/g, (whole, key: string) => vars[key] ?? whole);
+}
+
+/**
+ * The line spoken when a task finishes.
+ *
+ * Falls back to the unnamed set when there is no project, rather than substituting an empty string
+ * and announcing "Operation concluded on ." — a completion is the one announcement most likely to
+ * be heard from another room, so it has to survive missing data cleanly.
+ */
+export function completionPhrase(project?: string): string {
+    const name = project?.trim();
+    return name ? phrase("completeNamed", { project: name }) : phrase("complete");
 }
 
 /**
@@ -69,5 +109,10 @@ export const TEST_LINES = [
 
 /** Every line, for pre-rendering. */
 export function allPhrases(): string[] {
-    return [...Object.values(PHRASES).flat(), ...TEST_LINES];
+    // completeNamed carries a placeholder, so it cannot be pre-rendered — the project is only known
+    // when a task actually finishes.
+    const warmable = Object.entries(PHRASES)
+        .filter(([kind]) => kind !== "completeNamed")
+        .flatMap(([, lines]) => lines);
+    return [...warmable, ...TEST_LINES];
 }

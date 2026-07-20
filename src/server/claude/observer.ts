@@ -18,6 +18,7 @@
 import { sessionIdForPath, TranscriptTailer, type TailEvent } from "./tailer.js";
 import { findTranscript, SessionWatcher, type SessionChange, type SessionEntry } from "./sessions.js";
 import { isToolActivity, speakableText, splitForSpeech, summarizeForSpeech } from "./transcript.js";
+import { completionPhrase } from "../voice/phrases.js";
 
 /** The subset of a hook payload we rely on. Claude Code sends more; none of it is required. */
 export interface HookPayload {
@@ -359,6 +360,6 @@ export class SessionObserver {
         const cwd = change.session.cwd ?? this.cwdBySession.get(change.session.sessionId);
         const project = cwd ? cwd.split("/").filter(Boolean).pop() : undefined;
         this.events.state("idle");
-        this.events.say(project ? `Task complete. ${project}.` : "Task complete.");
+        this.events.say(completionPhrase(project));
     }
 }
