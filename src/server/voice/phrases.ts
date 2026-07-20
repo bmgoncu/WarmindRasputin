@@ -64,6 +64,42 @@ const PHRASES: Record<PhraseKind, string[]> = {
     ],
 };
 
+/**
+ * Project names that should be spoken differently from how they are written on disk.
+ *
+ * Keyed by the normalised directory name, so case and punctuation in the folder do not matter.
+ */
+const SPOKEN_NAMES: Record<string, string> = {
+    rasputinclaudeai: "Warmind Rasputin",
+};
+
+/**
+ * Turns a directory name into something worth saying aloud.
+ *
+ * Directory names are written for filesystems, not for speech: `RasputinClaudeAI` runs three words
+ * together and `merge-mogul_2` is read as punctuation. Splitting camel case and turning separators
+ * into spaces fixes most of it; the alias table handles the ones where the project is simply called
+ * something else out loud.
+ */
+export function spokenProjectName(project: string): string {
+    const trimmed = project.trim();
+    if (!trimmed) return trimmed;
+
+    const alias = SPOKEN_NAMES[trimmed.toLowerCase().replace(/[^a-z0-9]/g, "")];
+    if (alias) return alias;
+
+    return (
+        trimmed
+            // Split camel and Pascal case: "mergeMogul" and "RasputinClaudeAI" both become words.
+            // The second rule catches the boundary in an acronym run, e.g. "AITools" -> "AI Tools".
+            .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+            .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+            .replace(/[-_.]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+    );
+}
+
 /** Remembers the last line of each kind, so the same one is never heard twice running. */
 const lastUsed = new Map<PhraseKind, string>();
 
@@ -91,7 +127,7 @@ export function phrase(kind: PhraseKind, vars: Record<string, string> = {}): str
  */
 export function completionPhrase(project?: string): string {
     const name = project?.trim();
-    return name ? phrase("completeNamed", { project: name }) : phrase("complete");
+    return name ? phrase("completeNamed", { project: spokenProjectName(name) }) : phrase("complete");
 }
 
 /**

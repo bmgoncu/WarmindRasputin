@@ -1,4 +1,4 @@
-import { phrase, allPhrases, completionPhrase } from "../src/server/voice/phrases.js";
+import { phrase, allPhrases, completionPhrase, spokenProjectName } from "../src/server/voice/phrases.js";
 
 describe("phrase", () => {
     it("returns a line for every kind", () => {
@@ -75,5 +75,40 @@ describe("completionPhrase", () => {
     it("stays in register", () => {
         const banned = /\b(sure|okay|great|awesome|thanks|finished up|all set)\b/i;
         for (let i = 0; i < 30; i++) expect(completionPhrase("proj")).not.toMatch(banned);
+    });
+});
+
+describe("spokenProjectName", () => {
+    it("uses the alias for this project", () => {
+        expect(spokenProjectName("RasputinClaudeAI")).toBe("Warmind Rasputin");
+    });
+
+    it("matches the alias regardless of case or punctuation in the folder", () => {
+        expect(spokenProjectName("rasputin-claude-ai")).toBe("Warmind Rasputin");
+        expect(spokenProjectName("rasputinclaudeai")).toBe("Warmind Rasputin");
+    });
+
+    it("splits camel and Pascal case", () => {
+        // Directory names are written for filesystems; run together they are unintelligible aloud.
+        expect(spokenProjectName("HomeAssitant")).toBe("Home Assitant");
+        expect(spokenProjectName("mergeMogul")).toBe("merge Mogul");
+    });
+
+    it("keeps an acronym together but separates the word after it", () => {
+        expect(spokenProjectName("AIToolsKit")).toBe("AI Tools Kit");
+    });
+
+    it("turns separators into spaces", () => {
+        expect(spokenProjectName("merge-mogul_2")).toBe("merge mogul 2");
+        expect(spokenProjectName("bq-analytics-tools")).toBe("bq analytics tools");
+    });
+
+    it("leaves an ordinary lowercase name alone", () => {
+        expect(spokenProjectName("api")).toBe("api");
+    });
+
+    it("handles empty input", () => {
+        expect(spokenProjectName("")).toBe("");
+        expect(spokenProjectName("   ")).toBe("");
     });
 });

@@ -18,7 +18,7 @@
 import { sessionIdForPath, TranscriptTailer, type TailEvent } from "./tailer.js";
 import { findTranscript, SessionWatcher, type SessionChange, type SessionEntry } from "./sessions.js";
 import { isToolActivity, speakableText, splitForSpeech, summarizeForSpeech } from "./transcript.js";
-import { completionPhrase } from "../voice/phrases.js";
+import { completionPhrase, spokenProjectName } from "../voice/phrases.js";
 
 /** The subset of a hook payload we rely on. Claude Code sends more; none of it is required. */
 export interface HookPayload {
@@ -341,7 +341,8 @@ export class SessionObserver {
         this.events.focus({
             sessionId,
             cwd: resolved,
-            project: resolved ? resolved.split("/").filter(Boolean).pop() : undefined,
+            // Spoken form here too, so the tray label matches what is said aloud.
+            project: resolved ? spokenProjectName(resolved.split("/").filter(Boolean).pop() ?? "") : undefined,
             name: this.nameBySession.get(sessionId),
             sessions: this.liveCount,
             pinned,
