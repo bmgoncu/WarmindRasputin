@@ -315,6 +315,16 @@ matching-EQ derivation and the ambient bed need it; everything else works, and s
 
 > *"Compliance. I am Rasputin. I am awake. And I am watching."*
 
+<br>
+
+**[⬇ Releases](https://github.com/bmgoncu/WarmindRasputin/releases)**  ·
+ **[📖 Manual](docs/GUIDE.md)**  ·
+ **[🔧 Build notes](docs/BUILD.md)**  ·
+ **[📦 Releasing](docs/RELEASE.md)**  ·
+ **[⚙ Conventions](CLAUDE.md)**
+
+<br>
+
 **Not affiliated with Bungie or Anthropic.** A fan-made interface, built for the love of both.
 
 </div>
