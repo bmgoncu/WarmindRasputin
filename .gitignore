@@ -27,8 +27,8 @@ src-tauri/gen/
 
 # Bundled daemon — regenerable via `npm run bundle:daemon`.
 dist-daemon/
-# Rendered effects — regenerable via `npm run build:sfx`.
-dist-sfx/
+# Rendered effects (horn, arc crackles, ambient bed) — committed so a fresh clone
+# has sound without running build:sfx.
 
 # Release notes handed to `gh release create --notes-file`. Written fresh per
 # release; the canonical copy lives on the GitHub release itself. Untracked so it
