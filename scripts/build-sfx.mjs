@@ -2,10 +2,12 @@
  * Renders the sound effects the renderer plays: the attention horn, the arc crackles, and the
  * ambient bed.
  *
- * Horn and arcs are synthesised, so they ship. The ambient hum is derived from reference media in
- * `assets/refs/`, which is gitignored and not ours to redistribute — it is used when present and
- * skipped otherwise, so a released copy simply has no bed rather than shipping something it should
- * not.
+ * Arcs are synthesised, so they always ship. The attention horn PREFERS a cleaned reference clip at
+ * `assets/refs/horn-ref.wav` when present — closer to the game than the synth — and falls back to
+ * the synthesised horn otherwise, so a clean checkout still builds a horn. The ambient hum is
+ * likewise derived from reference media in `assets/refs/`. That directory is gitignored and not ours
+ * to redistribute: the repo never carries it, and only a local build or a release made on a machine
+ * that has it will bundle it. See CLAUDE.md → reference media.
  */
 import { writeFile, mkdir, access, copyFile } from "node:fs/promises";
 import { synthHorn } from "../lib/server/audio/horn.js";
@@ -39,8 +41,15 @@ function wav(samples, rate) {
     return Buffer.concat([header, data]);
 }
 
-await writeFile(`${OUT}/horn.wav`, wav(synthHorn(RATE), RATE));
-console.log("  horn.wav");
+const hornRef = "assets/refs/horn-ref.wav";
+try {
+    await access(hornRef);
+    await copyFile(hornRef, `${OUT}/horn.wav`);
+    console.log("  horn.wav (from assets/refs — the reference horn, local only, not redistributable)");
+} catch {
+    await writeFile(`${OUT}/horn.wav`, wav(synthHorn(RATE), RATE));
+    console.log("  horn.wav (synthesised)");
+}
 
 // Several variants so repeated arcs do not sound like one sample retriggered.
 const arcs = arcVariants(RATE, 6, 1337);

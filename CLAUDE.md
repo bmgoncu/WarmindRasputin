@@ -325,6 +325,12 @@ Matched to Destiny reference frames, **not** a reinterpretation. Verified from e
 - **No linter.** Deliberate — no eslint/prettier/biome config exists anywhere in `Depo/`.
 - **Tests live in root `__tests__/`**, named after the source file they cover (`src/foo-bar.ts` →
   `__tests__/foo-bar.test.ts`). Jest runs ESM, so `npm test` sets `--experimental-vm-modules`.
+- **The attention horn prefers a reference clip.** `build:sfx` uses `assets/refs/horn-ref.wav`
+  (gitignored, cleaned from the game audio) when present and falls back to the `horn.ts` synth
+  otherwise — the same local-only pattern as the ambient bed, so no game audio enters the repo and a
+  clean clone still builds a horn. `dist-sfx/horn.wav` therefore may not match the synth output. The
+  synth was retuned to the reference's measured spectral tilt (broadband, saturated) so the fallback
+  is still in the right family, not the old thin sine.
 
 ## Agents / skills
 
