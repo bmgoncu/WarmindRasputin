@@ -252,12 +252,12 @@ every one and tells you what is missing.
 ## ▸ HOW IT WORKS
 
 ```
-   ┌─ Tauri overlay ──────────────┐         ┌─ Node daemon :7331 ──────────────┐
-   │  transparent · always-on-top │         │  synthesis · features · cache    │
-   │  menu-bar · click-through     │◄──ws──►│  /audio · /sfx · POST /speak /ask │
-   │  └─ renderer (Three.js)       │         │  hooks · transcript tailer       │
-   │     orb · subtitles · horn    │         │  Agent SDK · WhisperKit · typing │
-   └───────────────────────────────┘         └──────────────────────────────────┘
+   ┌─ Tauri overlay ───────────────┐        ┌─ Node daemon :7331 ──────────────┐
+   │  transparent · always-on-top  │        │  synthesis · features · cache    │
+   │  menu-bar · click-through     │◄──ws──►│  /audio · /sfx · POST /speak /ask│
+   │  └─ renderer (Three.js)       │        │  hooks · transcript tailer       │
+   │     orb · subtitles · horn    │        │  Agent SDK · WhisperKit · typing │
+   └───────────────────────────────┘        └──────────────────────────────────┘
 ```
 
 Playback lives in the **browser**, not the daemon — `AudioContext.currentTime` is a sample-accurate
